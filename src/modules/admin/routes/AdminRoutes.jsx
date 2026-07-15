@@ -36,6 +36,8 @@ import EmployeeSalarySetup from "../pages/salary/EmployeeSalaraySetup";
 import MyProfile from "../pages/myprofile/MyProfile";
 
 import AdminWorkerWallet from "../pages/worker/AdminWorkerWallet";
+import ReferralDashboard from "../pages/referrals/ReferralDashboard";
+import ManageReferral from "../pages/referrals/ManageReferral";
 
 export default function AdminRoutes() {
   return (
@@ -91,7 +93,10 @@ export default function AdminRoutes() {
           <Route path="team/listing" element={<ManageTeams />} />
           <Route path="teams/add" element={<AddTeam />} />
           <Route path="teams/edit/:id" element={<EditTeam />} />
-
+          
+          <Route path="referrals/dashboard" element={<ReferralDashboard />} />
+          <Route path="referrals/manage" element={<ManageReferral />} />
+          
           <Route path="salary" element={<SalaryManagement />} />
           <Route path="salary/config/add" element={<AddSalaryConfig />} />
           <Route
