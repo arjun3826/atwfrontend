@@ -28,6 +28,9 @@ import {
   LayoutPanelTop,
   Banknote,
   BookOpen,
+  Percent,        
+  LayoutDashboard, 
+  BarChart3,       
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -244,6 +247,27 @@ const menuItems = [
         requiredPermission: { module: "payroll", action: "view" },
       },
       // { label: "TDS Settings", path: "/admin/tds-settings", icon: List },
+    ],
+  },
+  {
+    id: "referrals",
+    label: "Referrals",
+    icon: Percent,
+    path: "/admin/referrals/dashboard",
+    requiredPermission: { module: "referrals", action: "view" },
+    subItems: [
+      {
+        label: "Dashboard",
+        path: "/admin/referrals/dashboard",
+        icon: LayoutDashboard,
+        requiredPermission: { module: "referrals", action: "view" },
+      },
+      {
+        label: "Manage Referral",
+        path: "/admin/referrals/manage",
+        icon: BarChart3,
+        requiredPermission: { module: "referrals", action: "view" },
+      },
     ],
   },
   {
@@ -488,6 +512,14 @@ export default function Sidebar({ isOpen, onClose }) {
       isPathActive("/admin/tds-settings")
     );
   };
+
+  const isReferralsActive = () => {
+    return (
+      isPathActive("/admin/referrals/dashboard") ||
+      isPathActive("/admin/referrals/manage")
+    );
+  };
+  
   const isSupportActive = () => {
     return isPathActive("/admin/support");
   };
@@ -543,6 +575,11 @@ export default function Sidebar({ isOpen, onClose }) {
       return;
     }
 
+    if (isReferralsActive()) {              
+      setOpenDropdown("referrals");
+      return;
+    }
+
     const activeParent = menuItems.find((item) =>
       item.subItems?.some((sub) => {
         // For menu items that have the same base path as parent, check exact match
@@ -576,6 +613,9 @@ export default function Sidebar({ isOpen, onClose }) {
     }
     if (item.id === "reports") {
       return isReportsActive();
+    }
+     if (item.id === "referrals") {          
+      return isReferralsActive();
     }
     if (item.id === "company") {
       if (location.pathname === "/admin/company/payment-details") {
