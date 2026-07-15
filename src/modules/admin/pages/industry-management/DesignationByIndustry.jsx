@@ -26,6 +26,7 @@ import { useAdminPermissions } from "../../../../common/hooks/useAdminPermission
 import Loader from "../../../../common/components/Loader";
 import { useLocation, Link } from "react-router-dom";
 // View Modal for Designation (updated)
+import { Wrench } from "lucide-react";
 
 const DesignationViewModal = ({
   designation,
@@ -605,7 +606,7 @@ const DesignationByIndustry = () => {
                             <Edit2 size={18} />
                           </button>
                         )}
-                        {/* {canViewSkills && (
+                        {canViewSkills && (
                         <button
                           onClick={() =>
                             navigate(
@@ -617,7 +618,7 @@ const DesignationByIndustry = () => {
                         >
                           <Wrench size={18} />
                         </button>
-                        )} */}
+                        )}
                         {canDelete && (
                           <button
                             onClick={() => handleDelete(designation.id)}
