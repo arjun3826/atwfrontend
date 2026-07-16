@@ -159,8 +159,10 @@ import {
   Instagram,
   Linkedin,
 } from "lucide-react";
+import { useAuthContext } from "../../../common/context/AuthContext";
 
 const Footer = () => {
+  const { settings } = useAuthContext();
   return (
     <footer className="bg-gradient-to-r from-[#07152f] to-[#0a1a3d] text-white">
       <div className="max-w-7xl mx-auto px-6 py-12">
@@ -178,25 +180,23 @@ const Footer = () => {
             </h3>
 
             <p className="text-gray-300 text-sm leading-7 mb-6">
-              Anytimework helps workers find jobs faster and enables companies
-              to manage attendance, payroll, compliance, and workforce
-              operations through one platform.
+              {settings?.app_tagline}
             </p>
 
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-3">
                 <MapPin size={18} className="text-green-400" />
-                <span>Jaipur, Rajasthan, India</span>
+                <span>{settings?.office_address}</span>
               </div>
 
               <div className="flex items-center gap-3">
                 <Mail size={18} className="text-green-400" />
-                <span>hello@anytimework.in</span>
+                <span>{settings?.support_email}</span>
               </div>
 
               <div className="flex items-center gap-3">
                 <Phone size={18} className="text-green-400" />
-                <span>+91 98765 43210</span>
+                <span>{settings?.support_phone}</span>
               </div>
             </div>
           </div>
@@ -240,7 +240,7 @@ const Footer = () => {
             <div className="flex flex-wrap gap-4 my-6">
               {/* App Store */}
               <a
-                href="#"
+                href={settings?.app_store_url}
                 className="inline-flex items-center gap-3 bg-white border border-gray-200 px-5 py-3 rounded-2xl shadow-md hover:shadow-4xl transition"
               >
                 <svg
@@ -259,7 +259,7 @@ const Footer = () => {
 
               {/* Google Play */}
               <a
-                href="#"
+                href={settings?.play_store_url}
                 className="inline-flex items-center gap-0 bg-white border border-gray-200 px-5 py-3 rounded-2xl shadow-md hover:shadow-xl transition"
               >
                 <svg
@@ -278,21 +278,21 @@ const Footer = () => {
             </div>
             <div className="flex gap-4">
               <a
-                href="#"
+                href={settings?.facebook_url}
                 className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition"
               >
                 <Facebook size={18} />
               </a>
 
               <a
-                href="#"
+                href={settings?.instagram_url}
                 className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition"
               >
                 <Instagram size={18} />
               </a>
 
               <a
-                href="#"
+                href={settings?.linkedin_url}
                 className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition"
               >
                 <Linkedin size={18} />
