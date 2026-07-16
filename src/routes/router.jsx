@@ -166,6 +166,8 @@ import PrivacyPolicy from "../modules/admin/pages/SupportLinks/Privacy";
 import Terms from "../modules/admin/pages/SupportLinks/Terms";
 import CancellationPolicy from "../modules/admin/pages/SupportLinks/CancellationPolicy";
 import RefundPolicy from "../modules/admin/pages/SupportLinks/RefundPolicy";
+import ReferralDashboard from "../modules/admin/pages/referrals/ReferralDashboard";
+import ManageReferral from "../modules/admin/pages/referrals/ManageReferral";
 
 const router = createBrowserRouter([
   /* ================= ADMIN ================= */
@@ -259,6 +261,9 @@ const router = createBrowserRouter([
       { path: "salary", element: <SalaryManagement /> },
       { path: "salary/config/add", element: <AddSalaryConfig /> },
       { path: "salary/employee-setup", element: <EmployeeSalarySetup /> },
+      
+      { path: "referrals/dashboard", element: <ReferralDashboard /> },
+      { path: "referrals/manage", element: <ManageReferral /> },
 
       { path: "dress-orders", element: <ManageDressOrders /> },
       { path: "dress-orders/add", element: <AddDressOrder /> },
