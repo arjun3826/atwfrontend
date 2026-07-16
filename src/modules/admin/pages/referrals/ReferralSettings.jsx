@@ -19,65 +19,57 @@ import {
 } from "../../../../common/utils/motionVariants";
 
 /**
+ * State keys below match `referral_settings` table columns 1:1
+ * (see xxxx_xx_xx_add_fraud_recurring_general_to_referral_settings.php
+ * and the ReferralSetting model's $fillable list).
+ *
  * TODO: Replace mock state with a real hook, e.g.
  * const { settings, setSettings, saveSettings, loading } = useReferralSettings();
- * `saveSettings` would call POST /api/referral-settings with the current
- * `settings` object; the initial value below would come from
- * GET /api/referral-settings. No other UI code needs to change.
+ * `saveSettings` -> POST /api/referral-settings with `settings` as-is
+ * (no key mapping needed since these are the exact DB column names).
+ * Initial value below would come from GET /api/referral-settings.
  */
 const INITIAL_SETTINGS = {
-  worker: {
-    rewardType: "fixed",
-    rewardValue: 200,
+  // Worker -> Worker reward
+  worker_reward_type: "fixed", // enum: fixed | percentage
+  worker_reward_value: 200,
 
-    releaseConditions: {
-      registration: true,
-      kyc: true,
-      companyJoin: true,
-      salary: true,
-      adminApproval: true,
-    },
+  // Worker release conditions
+  require_registration: true,
+  require_kyc: true,
+  require_company_join: true,
+  require_salary: true,
+  worker_admin_approval: true,
 
-    fraud: {
-      selfReferral: true,
-      duplicateMobile: true,
-      duplicateDevice: true,
-      minimumSalary: 1000,
-    },
-  },
+  // Worker fraud prevention
+  worker_block_self_referral: true,
+  worker_block_duplicate_mobile: true,
+  worker_block_duplicate_device: true,
+  worker_minimum_salary: 1000,
 
-  agentWorker: {
-    commissionType: "percentage",
-    commissionValue: 10,
-    recurring: "monthly",
+  // Agent -> Worker commission
+  agent_worker_commission_type: "percentage", // enum: fixed | percentage
+  agent_worker_commission_value: 10,
+  agent_worker_recurring: "monthly", // enum: onetime | monthly | quarterly | yearly
+  agent_worker_require_invoice_paid: true,
 
-    releaseConditions: {
-      invoicePaid: true,
-    },
-  },
+  // Agent -> Company commission
+  agent_company_commission_type: "percentage", // enum: fixed | percentage
+  agent_company_commission_value: 5,
+  agent_company_recurring: "monthly", // enum: onetime | monthly | quarterly | yearly
+  agent_company_require_approval: true,
+  agent_company_require_vacancy: true,
+  agent_company_require_invoice_generated: true,
+  agent_company_require_invoice_paid: true,
 
-  agentCompany: {
-    commissionType: "percentage",
-    commissionValue: 5,
-    recurring: "monthly",
-
-    releaseConditions: {
-      companyApproved: true,
-      vacancyCreated: true,
-      invoiceGenerated: true,
-      invoicePaid: true,
-    },
-  },
-
-  general: {
-    enabled: true,
-    workerReferral: true,
-    agentReferral: true,
-    companyReferral: true,
-    allowReferralCode: true,
-    autoRelease: false,
-    requireApproval: true,
-  },
+  // General master switches
+  general_enabled: true,
+  general_worker_referral: true,
+  general_agent_referral: true,
+  general_company_referral: true,
+  general_allow_referral_code: true,
+  general_auto_release: false,
+  general_require_approval: true,
 };
 
 const RECURRING_OPTIONS = [
@@ -88,7 +80,7 @@ const RECURRING_OPTIONS = [
 ];
 
 /* -------------------------------------------------------------------------
- * Reusable primitives
+ * Reusable primitives (unchanged from original layout)
  * ---------------------------------------------------------------------- */
 
 const ToggleSwitch = ({ label, description, checked, onChange }) => (
@@ -251,27 +243,13 @@ const SettingCard = ({ icon: Icon, title, subtitle, children }) => (
 const ReferralSettings = () => {
   const [settings, setSettings] = useState(INITIAL_SETTINGS);
 
-  /* ---------- generic patch helpers (keep API-ready shape) ---------- */
-
-  const patchSection = (section, patch) =>
-    setSettings((prev) => ({
-      ...prev,
-      [section]: { ...prev[section], ...patch },
-    }));
-
-  const patchNested = (section, group, key, value) =>
-    setSettings((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [group]: {
-          ...prev[section][group],
-          [key]: value,
-        },
-      },
-    }));
+  /* Single flat patch helper — state keys already equal DB column names,
+     so this maps directly onto a PATCH/POST payload with no transform. */
+  const patch = (key, value) =>
+    setSettings((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = () => {
+    // POST /api/referral-settings  body: settings  (1:1 with DB columns)
     // eslint-disable-next-line no-console
     console.log(settings);
   };
@@ -283,30 +261,24 @@ const ReferralSettings = () => {
   /* ---------- derived summary values ---------- */
 
   const summary = useMemo(() => {
-    const workerPrefix = settings.worker.rewardType === "percentage" ? "%" : "\u20B9";
-    const agentPrefix =
-      settings.agentWorker.commissionType === "percentage" ? "%" : "\u20B9";
-    const companyPrefix =
-      settings.agentCompany.commissionType === "percentage" ? "%" : "\u20B9";
-
     const fraudEnabled =
-      settings.worker.fraud.selfReferral ||
-      settings.worker.fraud.duplicateMobile ||
-      settings.worker.fraud.duplicateDevice;
+      settings.worker_block_self_referral ||
+      settings.worker_block_duplicate_mobile ||
+      settings.worker_block_duplicate_device;
+
+    const fmt = (type, value) =>
+      type === "percentage" ? `${value}%` : `₹${value}`;
 
     return {
-      workerReward:
-        workerPrefix === "%"
-          ? `${settings.worker.rewardValue}%`
-          : `\u20B9${settings.worker.rewardValue}`,
-      agentCommission:
-        agentPrefix === "%"
-          ? `${settings.agentWorker.commissionValue}%`
-          : `\u20B9${settings.agentWorker.commissionValue}`,
-      companyCommission:
-        companyPrefix === "%"
-          ? `${settings.agentCompany.commissionValue}%`
-          : `\u20B9${settings.agentCompany.commissionValue}`,
+      workerReward: fmt(settings.worker_reward_type, settings.worker_reward_value),
+      agentCommission: fmt(
+        settings.agent_worker_commission_type,
+        settings.agent_worker_commission_value,
+      ),
+      companyCommission: fmt(
+        settings.agent_company_commission_type,
+        settings.agent_company_commission_value,
+      ),
       fraudEnabled,
     };
   }, [settings]);
@@ -376,15 +348,15 @@ const ReferralSettings = () => {
         {/* Card 1: Worker -> Worker Reward */}
         <SettingCard
           icon={Users}
-          title="Worker \u2192 Worker Reward"
+          title="Worker → Worker Reward"
           subtitle="Reward given to a worker for referring another worker"
         >
           <div>
             <SectionLabel>Reward Type</SectionLabel>
             <RadioButtonGroup
               name="worker-reward-type"
-              value={settings.worker.rewardType}
-              onChange={(value) => patchSection("worker", { rewardType: value })}
+              value={settings.worker_reward_type}
+              onChange={(value) => patch("worker_reward_type", value)}
               options={[
                 { value: "fixed", label: "Fixed Amount" },
                 { value: "percentage", label: "Percentage" },
@@ -394,10 +366,10 @@ const ReferralSettings = () => {
 
           <NumberInput
             label="Reward Value"
-            value={settings.worker.rewardValue}
+            value={settings.worker_reward_value}
             placeholder="200"
-            prefix={settings.worker.rewardType === "percentage" ? "%" : "\u20B9"}
-            onChange={(value) => patchSection("worker", { rewardValue: value })}
+            prefix={settings.worker_reward_type === "percentage" ? "%" : "₹"}
+            onChange={(value) => patch("worker_reward_value", value)}
           />
 
           <div>
@@ -405,38 +377,28 @@ const ReferralSettings = () => {
             <div className="divide-y divide-gray-100">
               <ToggleSwitch
                 label="Registration Completed"
-                checked={settings.worker.releaseConditions.registration}
-                onChange={(v) =>
-                  patchNested("worker", "releaseConditions", "registration", v)
-                }
+                checked={settings.require_registration}
+                onChange={(v) => patch("require_registration", v)}
               />
               <ToggleSwitch
                 label="KYC Completed"
-                checked={settings.worker.releaseConditions.kyc}
-                onChange={(v) =>
-                  patchNested("worker", "releaseConditions", "kyc", v)
-                }
+                checked={settings.require_kyc}
+                onChange={(v) => patch("require_kyc", v)}
               />
               <ToggleSwitch
                 label="Joined Company"
-                checked={settings.worker.releaseConditions.companyJoin}
-                onChange={(v) =>
-                  patchNested("worker", "releaseConditions", "companyJoin", v)
-                }
+                checked={settings.require_company_join}
+                onChange={(v) => patch("require_company_join", v)}
               />
               <ToggleSwitch
                 label="First Salary Earned"
-                checked={settings.worker.releaseConditions.salary}
-                onChange={(v) =>
-                  patchNested("worker", "releaseConditions", "salary", v)
-                }
+                checked={settings.require_salary}
+                onChange={(v) => patch("require_salary", v)}
               />
               <ToggleSwitch
                 label="Manual Admin Approval"
-                checked={settings.worker.releaseConditions.adminApproval}
-                onChange={(v) =>
-                  patchNested("worker", "releaseConditions", "adminApproval", v)
-                }
+                checked={settings.worker_admin_approval}
+                onChange={(v) => patch("worker_admin_approval", v)}
               />
             </div>
           </div>
@@ -446,30 +408,26 @@ const ReferralSettings = () => {
             <div className="divide-y divide-gray-100">
               <ToggleSwitch
                 label="Block Self Referral"
-                checked={settings.worker.fraud.selfReferral}
-                onChange={(v) => patchNested("worker", "fraud", "selfReferral", v)}
+                checked={settings.worker_block_self_referral}
+                onChange={(v) => patch("worker_block_self_referral", v)}
               />
               <ToggleSwitch
                 label="Block Duplicate Mobile"
-                checked={settings.worker.fraud.duplicateMobile}
-                onChange={(v) =>
-                  patchNested("worker", "fraud", "duplicateMobile", v)
-                }
+                checked={settings.worker_block_duplicate_mobile}
+                onChange={(v) => patch("worker_block_duplicate_mobile", v)}
               />
               <ToggleSwitch
                 label="Block Duplicate Device"
-                checked={settings.worker.fraud.duplicateDevice}
-                onChange={(v) =>
-                  patchNested("worker", "fraud", "duplicateDevice", v)
-                }
+                checked={settings.worker_block_duplicate_device}
+                onChange={(v) => patch("worker_block_duplicate_device", v)}
               />
             </div>
             <div className="mt-3">
               <NumberInput
                 label="Minimum Salary Required"
-                value={settings.worker.fraud.minimumSalary}
-                prefix="\u20B9"
-                onChange={(v) => patchNested("worker", "fraud", "minimumSalary", v)}
+                value={settings.worker_minimum_salary}
+                prefix="₹"
+                onChange={(v) => patch("worker_minimum_salary", v)}
               />
             </div>
           </div>
@@ -478,17 +436,15 @@ const ReferralSettings = () => {
         {/* Card 2: Agent -> Worker Commission */}
         <SettingCard
           icon={Building2}
-          title="Agent \u2192 Worker Commission"
+          title="Agent → Worker Commission"
           subtitle="Commission paid to an agent for referring a worker"
         >
           <div>
             <SectionLabel>Commission Type</SectionLabel>
             <RadioButtonGroup
               name="agent-worker-commission-type"
-              value={settings.agentWorker.commissionType}
-              onChange={(value) =>
-                patchSection("agentWorker", { commissionType: value })
-              }
+              value={settings.agent_worker_commission_type}
+              onChange={(value) => patch("agent_worker_commission_type", value)}
               options={[
                 { value: "fixed", label: "Fixed" },
                 { value: "percentage", label: "Percentage" },
@@ -499,21 +455,19 @@ const ReferralSettings = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <NumberInput
               label="Commission Value"
-              value={settings.agentWorker.commissionValue}
+              value={settings.agent_worker_commission_value}
               prefix={
-                settings.agentWorker.commissionType === "percentage"
+                settings.agent_worker_commission_type === "percentage"
                   ? "%"
-                  : "\u20B9"
+                  : "₹"
               }
-              onChange={(value) =>
-                patchSection("agentWorker", { commissionValue: value })
-              }
+              onChange={(value) => patch("agent_worker_commission_value", value)}
             />
             <SelectInput
               label="Recurring Type"
-              value={settings.agentWorker.recurring}
+              value={settings.agent_worker_recurring}
               options={RECURRING_OPTIONS}
-              onChange={(value) => patchSection("agentWorker", { recurring: value })}
+              onChange={(value) => patch("agent_worker_recurring", value)}
             />
           </div>
 
@@ -522,10 +476,8 @@ const ReferralSettings = () => {
             <div className="divide-y divide-gray-100">
               <ToggleSwitch
                 label="Invoice Paid"
-                checked={settings.agentWorker.releaseConditions.invoicePaid}
-                onChange={(v) =>
-                  patchNested("agentWorker", "releaseConditions", "invoicePaid", v)
-                }
+                checked={settings.agent_worker_require_invoice_paid}
+                onChange={(v) => patch("agent_worker_require_invoice_paid", v)}
               />
             </div>
           </div>
@@ -534,17 +486,15 @@ const ReferralSettings = () => {
         {/* Card 3: Agent -> Company Commission */}
         <SettingCard
           icon={Building2}
-          title="Agent \u2192 Company Commission"
+          title="Agent → Company Commission"
           subtitle="Commission paid to an agent for referring a company"
         >
           <div>
             <SectionLabel>Commission Type</SectionLabel>
             <RadioButtonGroup
               name="agent-company-commission-type"
-              value={settings.agentCompany.commissionType}
-              onChange={(value) =>
-                patchSection("agentCompany", { commissionType: value })
-              }
+              value={settings.agent_company_commission_type}
+              onChange={(value) => patch("agent_company_commission_type", value)}
               options={[
                 { value: "fixed", label: "Fixed" },
                 { value: "percentage", label: "Percentage" },
@@ -555,23 +505,19 @@ const ReferralSettings = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <NumberInput
               label="Commission Value"
-              value={settings.agentCompany.commissionValue}
+              value={settings.agent_company_commission_value}
               prefix={
-                settings.agentCompany.commissionType === "percentage"
+                settings.agent_company_commission_type === "percentage"
                   ? "%"
-                  : "\u20B9"
+                  : "₹"
               }
-              onChange={(value) =>
-                patchSection("agentCompany", { commissionValue: value })
-              }
+              onChange={(value) => patch("agent_company_commission_value", value)}
             />
             <SelectInput
               label="Recurring Type"
-              value={settings.agentCompany.recurring}
+              value={settings.agent_company_recurring}
               options={RECURRING_OPTIONS}
-              onChange={(value) =>
-                patchSection("agentCompany", { recurring: value })
-              }
+              onChange={(value) => patch("agent_company_recurring", value)}
             />
           </div>
 
@@ -580,46 +526,25 @@ const ReferralSettings = () => {
             <div className="divide-y divide-gray-100">
               <ToggleSwitch
                 label="Company Approved"
-                checked={settings.agentCompany.releaseConditions.companyApproved}
-                onChange={(v) =>
-                  patchNested(
-                    "agentCompany",
-                    "releaseConditions",
-                    "companyApproved",
-                    v,
-                  )
-                }
+                checked={settings.agent_company_require_approval}
+                onChange={(v) => patch("agent_company_require_approval", v)}
               />
               <ToggleSwitch
                 label="Vacancy Created"
-                checked={settings.agentCompany.releaseConditions.vacancyCreated}
-                onChange={(v) =>
-                  patchNested(
-                    "agentCompany",
-                    "releaseConditions",
-                    "vacancyCreated",
-                    v,
-                  )
-                }
+                checked={settings.agent_company_require_vacancy}
+                onChange={(v) => patch("agent_company_require_vacancy", v)}
               />
               <ToggleSwitch
                 label="Invoice Generated"
-                checked={settings.agentCompany.releaseConditions.invoiceGenerated}
+                checked={settings.agent_company_require_invoice_generated}
                 onChange={(v) =>
-                  patchNested(
-                    "agentCompany",
-                    "releaseConditions",
-                    "invoiceGenerated",
-                    v,
-                  )
+                  patch("agent_company_require_invoice_generated", v)
                 }
               />
               <ToggleSwitch
                 label="Invoice Paid"
-                checked={settings.agentCompany.releaseConditions.invoicePaid}
-                onChange={(v) =>
-                  patchNested("agentCompany", "releaseConditions", "invoicePaid", v)
-                }
+                checked={settings.agent_company_require_invoice_paid}
+                onChange={(v) => patch("agent_company_require_invoice_paid", v)}
               />
             </div>
           </div>
@@ -635,39 +560,39 @@ const ReferralSettings = () => {
             <ToggleSwitch
               label="Enable Referral System"
               description="Master switch for all referral types"
-              checked={settings.general.enabled}
-              onChange={(v) => patchSection("general", { enabled: v })}
+              checked={settings.general_enabled}
+              onChange={(v) => patch("general_enabled", v)}
             />
             <ToggleSwitch
               label="Enable Worker Referral"
-              checked={settings.general.workerReferral}
-              onChange={(v) => patchSection("general", { workerReferral: v })}
+              checked={settings.general_worker_referral}
+              onChange={(v) => patch("general_worker_referral", v)}
             />
             <ToggleSwitch
               label="Enable Agent Referral"
-              checked={settings.general.agentReferral}
-              onChange={(v) => patchSection("general", { agentReferral: v })}
+              checked={settings.general_agent_referral}
+              onChange={(v) => patch("general_agent_referral", v)}
             />
             <ToggleSwitch
               label="Enable Company Referral"
-              checked={settings.general.companyReferral}
-              onChange={(v) => patchSection("general", { companyReferral: v })}
+              checked={settings.general_company_referral}
+              onChange={(v) => patch("general_company_referral", v)}
             />
             <ToggleSwitch
               label="Allow Referral Code Sharing"
-              checked={settings.general.allowReferralCode}
-              onChange={(v) => patchSection("general", { allowReferralCode: v })}
+              checked={settings.general_allow_referral_code}
+              onChange={(v) => patch("general_allow_referral_code", v)}
             />
             <ToggleSwitch
               label="Auto Release Rewards"
               description="Skip manual approval once conditions are met"
-              checked={settings.general.autoRelease}
-              onChange={(v) => patchSection("general", { autoRelease: v })}
+              checked={settings.general_auto_release}
+              onChange={(v) => patch("general_auto_release", v)}
             />
             <ToggleSwitch
               label="Require Admin Approval"
-              checked={settings.general.requireApproval}
-              onChange={(v) => patchSection("general", { requireApproval: v })}
+              checked={settings.general_require_approval}
+              onChange={(v) => patch("general_require_approval", v)}
             />
           </div>
         </SettingCard>
