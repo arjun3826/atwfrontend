@@ -23,8 +23,16 @@ export const addSkillAPI = async (payload) => {
 };
 
 // Update a skill
+// export const updateSkillAPI = async (skillId, payload) => {
+//   const response = await axiosInstance.put(`/admin/skills/${skillId}`, payload);
+//   return response.data;
+// };
+// Update a skill
 export const updateSkillAPI = async (skillId, payload) => {
-  const response = await axiosInstance.put(`/admin/skills/${skillId}`, payload);
+  if (payload instanceof FormData) {
+    payload.append("_method", "PUT");
+  }
+  const response = await axiosInstance.post(`/admin/skills/${skillId}`, payload);
   return response.data;
 };
 
