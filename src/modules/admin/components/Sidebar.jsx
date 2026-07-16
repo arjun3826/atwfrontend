@@ -268,6 +268,12 @@ const menuItems = [
         icon: BarChart3,
         requiredPermission: { module: "referrals", action: "view" },
       },
+       {
+        label: "Referral Settings",
+        path: "/admin/referrals/settings",
+        icon: Settings,
+        requiredPermission: { module: "referrals", action: "view" },
+      },
     ],
   },
   {

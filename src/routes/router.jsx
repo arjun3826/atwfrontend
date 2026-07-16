@@ -168,6 +168,7 @@ import CancellationPolicy from "../modules/admin/pages/SupportLinks/Cancellation
 import RefundPolicy from "../modules/admin/pages/SupportLinks/RefundPolicy";
 import ReferralDashboard from "../modules/admin/pages/referrals/ReferralDashboard";
 import ManageReferral from "../modules/admin/pages/referrals/ManageReferral";
+import ReferralSettings from "../modules/admin/pages/referrals/ReferralSettings";
 
 const router = createBrowserRouter([
   /* ================= ADMIN ================= */
@@ -264,6 +265,7 @@ const router = createBrowserRouter([
       
       { path: "referrals/dashboard", element: <ReferralDashboard /> },
       { path: "referrals/manage", element: <ManageReferral /> },
+      { path: "referrals/settings", element: <ReferralSettings /> },
 
       { path: "dress-orders", element: <ManageDressOrders /> },
       { path: "dress-orders/add", element: <AddDressOrder /> },
