@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
-import { Save } from "lucide-react";
+import { Save, Image as ImageIcon } from "lucide-react";
 import Swal from "sweetalert2";
 import {
   containerVariants,
@@ -22,10 +22,18 @@ const EditSkill = () => {
   const [formData, setFormData] = useState({
     name: "",
     designation_id: designationId,
+    image: null, // new file, if user picks one
   });
-  const [errors, setErrors] = useState({ name: "" });
+
+  // URL used for <img src>. Starts as the existing image from the API.
+  const [imagePreview, setImagePreview] = useState(null);
+  // Keep the original image url separately so we know if the user replaced it
+  const [existingImage, setExistingImage] = useState(null);
+
+  const [errors, setErrors] = useState({ name: "", image: "" });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const BASE_URL = process.env.REACT_APP_API_URL.replace("/api", "");
 
   useEffect(() => {
     const fetchSkill = async () => {
@@ -33,9 +41,19 @@ const EditSkill = () => {
         setLoading(true);
         const response = await getSkillByIdAPI(skillId);
         const skill = response.data.data || response.data;
-        setFormData({
+
+        setFormData((prev) => ({
+          ...prev,
           name: skill.name,
-        });
+        }));
+
+        // Adjust this line if your API returns a different field name
+        // (e.g. skill.image_url, skill.image?.url, etc.)
+        if (skill.skill_image) {
+          const imageUrl = `${BASE_URL}/uploads/skills/${skill.skill_image}`;
+          setExistingImage(imageUrl);
+          setImagePreview(imageUrl);
+        }
       } catch (error) {
         console.error("Error fetching skill:", error);
         Swal.fire({
@@ -52,8 +70,23 @@ const EditSkill = () => {
   }, [skillId, designationId, navigate]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, files } = e.target;
+
+    if (name === "image") {
+      const file = files[0];
+
+      setFormData((prev) => ({ ...prev, image: file }));
+
+      if (file) {
+        setImagePreview(URL.createObjectURL(file));
+      } else {
+        // fall back to existing image if user clears the file input
+        setImagePreview(existingImage);
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
@@ -63,6 +96,10 @@ const EditSkill = () => {
     const newErrors = {};
     if (!formData.name.trim()) {
       newErrors.name = "Skill name is required";
+    }
+    // image is optional on edit — only required if there's no existing image
+    if (!formData.image && !existingImage) {
+      newErrors.image = "Skill image is required";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -74,7 +111,15 @@ const EditSkill = () => {
 
     setSubmitting(true);
     try {
-      await updateSkillAPI(skillId, formData);
+      const data = new FormData();
+      data.append("name", formData.name);
+      data.append("designation_id", formData.designation_id);
+      // only send image if the user actually picked a new one
+      if (formData.image) {
+        data.append("image", formData.image);
+      }
+
+      await updateSkillAPI(skillId, data);
       Swal.fire({
         icon: "success",
         title: "Success!",
@@ -142,32 +187,81 @@ const EditSkill = () => {
           onSubmit={handleSubmit}
           className="space-y-6 max-w-2xl bg-white rounded-2xl border border-gray-200 shadow-sm p-6"
         >
-          <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Skill Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              onBlur={() => validate()}
-              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.name ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="Enter skill name"
-              autoFocus
-            />
-            {errors.name && (
-              <p className="mt-1 text-sm text-red-600">{errors.name}</p>
-            )}
+          <div className="flex flex-col lg:flex-row gap-10">
+            {/* LEFT - inputs */}
+            <div className="flex-1 space-y-6">
+              <div>
+                <label
+                  htmlFor="name"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Skill Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  onBlur={() => validate()}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.name ? "border-red-500" : "border-gray-300"
+                  }`}
+                  placeholder="Enter skill name"
+                  autoFocus
+                />
+                {errors.name && (
+                  <p className="mt-1 text-sm text-red-600">{errors.name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Skill Image
+                </label>
+                <input
+                  type="file"
+                  name="image"
+                  accept="image/*"
+                  onChange={handleChange}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none ${
+                    errors.image ? "border-red-500" : "border-gray-300"
+                  }`}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Leave empty to keep the current image.
+                </p>
+                {errors.image && (
+                  <p className="mt-1 text-sm text-red-600">{errors.image}</p>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT - preview */}
+            <div className="w-full lg:w-64 flex flex-col items-center">
+              <h3 className="text-center font-semibold text-gray-700 mb-4">
+                Image Preview
+              </h3>
+              <div className="w-56 rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-sm">
+                <div className="h-40 bg-gray-100 flex items-center justify-center overflow-hidden">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      className="w-full h-full object-cover"
+                      alt="Skill preview"
+                    />
+                  ) : (
+                    <div className="text-center text-gray-400">
+                      <ImageIcon className="w-10 h-10 mx-auto mb-2" />
+                      <p className="text-sm">No Image</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 border-t pt-6">
             <button
               type="button"
               onClick={() =>
