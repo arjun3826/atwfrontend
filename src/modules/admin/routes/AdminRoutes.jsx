@@ -38,6 +38,9 @@ import MyProfile from "../pages/myprofile/MyProfile";
 import AdminWorkerWallet from "../pages/worker/AdminWorkerWallet";
 import ReferralDashboard from "../pages/referrals/ReferralDashboard";
 import ManageReferral from "../pages/referrals/ManageReferral";
+import ReferralSettings from "../pages/referrals/ReferralSettings";
+
+
 
 export default function AdminRoutes() {
   return (
@@ -96,6 +99,7 @@ export default function AdminRoutes() {
           
           <Route path="referrals/dashboard" element={<ReferralDashboard />} />
           <Route path="referrals/manage" element={<ManageReferral />} />
+          <Route path="referrals/settings" element={<ReferralSettings />} />
           
           <Route path="salary" element={<SalaryManagement />} />
           <Route path="salary/config/add" element={<AddSalaryConfig />} />
