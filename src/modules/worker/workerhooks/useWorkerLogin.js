@@ -178,7 +178,7 @@ export const useWorkerLogin = () => {
   Cookies.remove("verified_mobile");
 
   // Save the newly verified mobile
-  Cookies.set("verified_mobile", payload.mobile_number, cookieOptions);
+  Cookies.set("verified_mobile", digitsOnly, cookieOptions);
 
   navigate("/worker/register", {
     replace: true,

@@ -1627,12 +1627,12 @@ const WorkerSignup = () => {
                     type="text"
                     maxLength={10}
                     value={formData.mobile_number}
-                    disabled={hasToken}
+                     disabled={hasToken || !!Cookies.get("verified_mobile")}
                     onChange={(e) => handleChange("mobile_number", e.target.value.replace(/\D/g, ""))}
                     placeholder="Enter your mobile number"
                     className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-400
                       ${errors.mobile_number ? "border-red-500" : "border-gray-300"}
-                      ${hasToken ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                      ${hasToken || !!Cookies.get("verified_mobile") ? "bg-gray-100 cursor-not-allowed" : ""}`}
                   />
                 </div>
                 {errors.mobile_number && (

@@ -191,7 +191,13 @@ export const useWorkerSignup = ({ onSuccess } = {}) => {
     fetchIndustries();
     fetchStates();
   }, []);
-
+  
+useEffect(() => {
+  const verifiedMobile = Cookies.get("verified_mobile");
+  if (verifiedMobile && !formData.mobile_number) {
+    updateFormData({ mobile_number: verifiedMobile });
+  }
+}, []);
   // When industry changes, reload designations
   useEffect(() => {
     if (formData.industry_id) {
@@ -555,6 +561,7 @@ const validateStep3 = () => {
 
         Cookies.set("token", authToken, cookieOptions);
         Cookies.set("role", "worker", cookieOptions);
+        Cookies.remove("verified_mobile");
 
         setToken(authToken);
       }
