@@ -263,17 +263,23 @@ const menuItems = [
         requiredPermission: { module: "referrals", action: "view" },
       },
       {
-        label: "Manage Referral",
-        path: "/admin/referrals/manage",
-        icon: BarChart3,
+        label: "Referral Rules",
+        path: "/admin/referrals/rules",
+        icon: FileText,
         requiredPermission: { module: "referrals", action: "view" },
       },
-       {
-        label: "Referral Settings",
-        path: "/admin/referrals/settings",
-        icon: Settings,
-        requiredPermission: { module: "referrals", action: "view" },
-      },
+      // {
+      //   label: "Manage Referral",
+      //   path: "/admin/referrals/manage",
+      //   icon: BarChart3,
+      //   requiredPermission: { module: "referrals", action: "view" },
+      // },
+      //  {
+      //   label: "Referral Settings",
+      //   path: "/admin/referrals/settings",
+      //   icon: Settings,
+      //   requiredPermission: { module: "referrals", action: "view" },
+      // },
     ],
   },
   {
