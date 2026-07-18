@@ -30,7 +30,8 @@ export const verifyAadhaarOtpAPI = async (
   otp,
   reference_id
 ) => {
-  const response = await axiosInstance.post(
+  try {
+    const response = await axiosInstance.post(
     "/worker/verifyAadhaarOtp",
     {
       otp,
@@ -38,6 +39,14 @@ export const verifyAadhaarOtpAPI = async (
     }
   );
   return response.data;
+  } catch (error) {
+    return (
+            error.response?.data || {
+                success: false,
+                message: "Verification failed",
+            }
+        );
+  }
 };
 
 export const resendAadhaarOtpAPI = async (aadhaarNumber) => {

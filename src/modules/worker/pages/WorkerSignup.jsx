@@ -965,7 +965,6 @@
 //   );
 // };
 
-// export default WorkerSignup;
 
 import React, { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -979,6 +978,7 @@ import {
   CreditCard,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CheckCircle,
   AlertCircle,
   Lock,
@@ -1037,8 +1037,14 @@ const WorkerSignup = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [privacyHasScrolledToBottom, setPrivacyHasScrolledToBottom] = useState(false);
   const [privacyModalCheckboxChecked, setPrivacyModalCheckboxChecked] = useState(false);
-  const [showSkillDropdown, setShowSkillDropdown] = useState(false);
+  const [showSkillDropdown, setShowSkillDropdown] = useState(false); // kept for backward compat, unused by new tile UI
+  const [showAllSkills, setShowAllSkills] = useState(false);
   const skillRef = useRef(null);
+
+  // NEW: local sub-step for the "Review Details" mega-step (screen 1a: identity, screen 1b: address)
+  // TODO(hook): once useWorkerSignup exposes a 4-step flow (Review, Work, Location, Banking),
+  // this can move into the hook. For now it's purely a UI-level split of hook step 1.
+  const [basicSubStep, setBasicSubStep] = useState(1); // 1 = identity review, 2 = address review
 
   useEffect(() => {
     const onDown = (e) => {
@@ -1051,6 +1057,7 @@ const WorkerSignup = () => {
 
   useEffect(() => {
     setShowSkillDropdown(false);
+    setShowAllSkills(false);
   }, [formData.designation_id]);
 
   const toggleSkill = (skill) => {
@@ -1104,14 +1111,10 @@ const WorkerSignup = () => {
     setPrivacyModalCheckboxChecked(formData.accepted_privacy);
   }, [formData.accepted_privacy]);
 
-  const stepTitles = ["Basic Info", "Work Details", "Personal Details", "Work Location", "Bank & Terms"];
-  const stepIcons = [
-    <User size={18} />,
-    <Briefcase size={18} />,
-    <FileText size={18} />,
-    <Home size={18} />,
-    <CreditCard size={18} />,
-  ];
+  // ---------------- NEW 4-step wizard header config ----------------
+  // Step 1 "Review Details" internally has 2 screens (basicSubStep 1 & 2) — see mockups 1 & 2.
+  const stepTitles = ["Review Details", "Work Details", "Work Location", "Banking Details"];
+  const stepIcons = [<UserPlus size={18} />, <Briefcase size={18} />, <Home size={18} />, <CreditCard size={18} />];
 
   // ---------------- Terms modal handlers (unchanged) ----------------
   const handleModalScroll = (e) => {
@@ -1248,13 +1251,55 @@ const WorkerSignup = () => {
 
   const skipAadhaarGate = () => setAadhaarGateStage("skipped");
 
+  // ---------------- NEW: Review-screen readonly field ----------------
+  const ReadonlyField = ({ icon, label, value, verified }) => (
+    <div>
+      <label className="block text-sm font-medium mb-1 text-gray-800">{label}</label>
+      <div className="relative">
+        {icon && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600">{icon}</span>}
+        <input
+          type="text"
+          readOnly
+          value={value || ""}
+          className={`w-full ${icon ? "pl-10" : "pl-3"} pr-9 py-2.5 border rounded-lg bg-blue-50/40 border-blue-200 text-gray-700 cursor-default`}
+        />
+        {verified ? (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-green-600 flex items-center gap-1">
+            Verified <CheckCircle size={14} />
+          </span>
+        ) : (
+          <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        )}
+      </div>
+    </div>
+  );
+
+  // ---------------- NEW: Step 1 "Back" / "Continue" handlers ----------------
+  const handleReviewBack = () => {
+    if (basicSubStep === 2) {
+      setBasicSubStep(1);
+    } else {
+      prevStep();
+    }
+  };
+  const handleReviewContinue = () => {
+    if (basicSubStep === 1) {
+      setBasicSubStep(2);
+    } else {
+      nextStep();
+    }
+  };
+
   const stepperHeader = (
     <div className="mb-8">
       <div className="flex justify-between mb-2">
         {stepTitles.map((title, idx) => (
           <div key={idx} className="flex flex-col items-center flex-1">
             <button
-              onClick={() => goToStep(idx + 1)}
+              onClick={() => {
+                if (idx + 1 === 1) setBasicSubStep(1);
+                goToStep(idx + 1);
+              }}
               disabled={idx + 1 > currentStep || loading}
               className={`flex items-center justify-center w-9 h-9 rounded-full text-sm font-medium transition
                 ${idx + 1 === currentStep ? "bg-green-600 text-white ring-4 ring-green-100" : idx + 1 < currentStep ? "bg-green-500 text-white" : "bg-gray-200 text-gray-500"}
@@ -1269,7 +1314,9 @@ const WorkerSignup = () => {
       <div className="h-2 bg-gray-200 rounded-full">
         <div
           className="h-full bg-gradient-to-r from-green-600 to-teal-600 rounded-full transition-all duration-500"
-          style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+          style={{
+            width: `${(((currentStep === 1 ? (basicSubStep === 2 ? 0.9 : 0.4) : currentStep)) / totalSteps) * 100}%`,
+          }}
         />
       </div>
     </div>
@@ -1299,16 +1346,33 @@ const WorkerSignup = () => {
     </div>
   );
 
+  // NEW: dynamic page title shown OUTSIDE the card (matches mockups) — one per wizard screen
+  const pageTitle = (() => {
+    switch (currentStep) {
+      case 1:
+        return "Review Your Basic Details";
+      case 2:
+        return "Select Your Work Details";
+      case 3:
+        return "Add Your Work location";
+      case 4:
+        return "Add Your Banking details";
+      default:
+        return "Worker Registration";
+    }
+  })();
+
   const pageShell = (children) => (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4 flex items-center justify-center">
       <div className="relative z-10 w-full max-w-4xl">
-        <div className="text-center mb-4">
+        <div className="mb-4">
           {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="max-h-20 mx-auto mb-3" />
+            <img src={logoUrl} alt="Logo" className="max-h-20 mb-3" />
           ) : (
-            <Building2 className="w-10 h-10 text-white bg-green-600 p-2 rounded-xl mx-auto mb-3" />
+            <Building2 className="w-10 h-10 text-white bg-green-600 p-2 rounded-xl mb-3" />
           )}
         </div>
+        <h1 className="text-2xl font-bold text-blue-700 text-center mb-6">{pageTitle}</h1>
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8">{children}</div>
         <div className="text-center mt-6 text-gray-500 text-sm">
           <p>© {new Date().getFullYear()} Worker Portal. All rights reserved.</p>
@@ -1323,8 +1387,7 @@ const WorkerSignup = () => {
     </div>
   );
 
-  // ======================= AADHAAR GATE SCREENS (stub) =======================
-  // Screen 1: "Let's Create Your Account" — split panel, matches reference mockup 1:1.
+  // ======================= AADHAAR GATE SCREENS (stub, unchanged) =======================
   if (aadhaarGateStage === "number") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6">
@@ -1339,7 +1402,6 @@ const WorkerSignup = () => {
 
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
             <div className="grid grid-cols-1 md:grid-cols-2">
-              {/* Left: form */}
               <div className="p-8 sm:p-10 flex flex-col justify-center">
                 <h1 className="text-2xl font-bold text-blue-700">Let's Create Your Account</h1>
                 <p className="text-gray-500 text-sm mt-2 leading-relaxed">
@@ -1445,8 +1507,6 @@ const WorkerSignup = () => {
     );
   }
 
-  // Screen 2: "Verify Aadhar OTP" — centered card, matches reference mockup 1:1,
-  // including the bottom-right success toast shown right after verification.
   if (aadhaarGateStage === "otp") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6">
@@ -1574,7 +1634,6 @@ const WorkerSignup = () => {
           </div>
         </div>
 
-        {/* Success toast — "Retrieving your details..." (matches mockup) */}
         {showAadhaarSuccessToast && (
           <div className="fixed bottom-6 right-6 z-[9999] w-72 bg-white rounded-xl shadow-2xl border border-gray-100 p-4">
             <div className="flex items-start gap-3">
@@ -1609,102 +1668,67 @@ const WorkerSignup = () => {
 
   const aadhaarLocked = aadhaarGateStage === "done";
 
+  // ======================= NEW 4-STEP WIZARD BODY =======================
   const renderStepContent = () => {
     switch (currentStep) {
+      // -------- STEP 1: Review Details (2 sub-screens) --------
       case 1:
-        return (
-          <div className="space-y-6">
-            <h2 className="text-xl font-bold text-gray-800">Basic Information</h2>
-            <p className="text-gray-600">Enter your personal and contact details.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Mobile Number <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    maxLength={10}
-                    value={formData.mobile_number}
-                     disabled={hasToken || !!Cookies.get("verified_mobile")}
-                    onChange={(e) => handleChange("mobile_number", e.target.value.replace(/\D/g, ""))}
-                    placeholder="Enter your mobile number"
-                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-400
-                      ${errors.mobile_number ? "border-red-500" : "border-gray-300"}
-                      ${hasToken || !!Cookies.get("verified_mobile") ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                  />
-                </div>
-                {errors.mobile_number && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.mobile_number}
-                  </p>
-                )}
+        if (basicSubStep === 1) {
+          return (
+            <div className="space-y-6">
+              <div className="text-center">
+                <p className="text-gray-500 text-sm mt-1">
+                  The following details have been securely retrieved from your Aadhaar.
+                  <br />
+                  Please review them before continuing.
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  First Name <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    maxLength={35}
-                    value={formData.first_name}
-                    onChange={(e) => handleChange("first_name", e.target.value)}
-                    placeholder="Enter your first name"
-                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg ${errors.first_name ? "border-red-500" : "border-gray-300"}`}
-                  />
-                </div>
-                {errors.first_name && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.first_name}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Last Name <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    maxLength={35}
-                    value={formData.last_name}
-                    onChange={(e) => handleChange("last_name", e.target.value)}
-                    placeholder="Enter your last name"
-                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg ${errors.last_name ? "border-red-500" : "border-gray-300"}`}
-                  />
-                </div>
-                {errors.last_name && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.last_name}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="email"
-                    value={formData.work_email}
-                    onChange={(e) => handleChange("work_email", e.target.value)}
-                    placeholder="Enter your work email"
-                    className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg"
-                  />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <ReadonlyField icon={<User size={16} />} label="First name" value={formData.first_name} />
+                <ReadonlyField icon={<User size={16} />} label="Last name" value={formData.last_name} />
+                <ReadonlyField icon={<Phone size={16} />} label="Mobile No." value={formData.mobile_number} />
+                <ReadonlyField
+                  icon={<FileText size={16} />}
+                  label="Aadhar No"
+                  value={
+                    formData.aadhar_number
+                      ? `${formData.aadhar_number.slice(0, 3)}${"*".repeat(6)}${formData.aadhar_number.slice(-2)}`
+                      : ""
+                  }
+                  verified
+                />
+                <ReadonlyField icon={<User size={16} />} label="Father's Name" value={formData.father_name} />
+                <ReadonlyField icon={<Calendar size={16} />} label="Date of Birth" value={formData.date_of_birth} />
               </div>
             </div>
+          );
+        }
+        return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <p className="text-gray-500 text-sm mt-1">
+                The following details have been securely retrieved from your Aadhaar.
+                <br />
+                Please review them before continuing.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <ReadonlyField label="State" value={states.find((s) => s.id === formData.state_id)?.name} />
+              <ReadonlyField label="District" value={citiesMap[formData.state_id]?.find((c) => c.id === formData.city_id)?.name} />
+              <ReadonlyField label="Pincode" value={formData.working_zip} />
+            </div>
+            <ReadonlyField label="Address" value={formData.address_line} />
           </div>
         );
 
-      case 2:
+      // -------- STEP 2: Work Details --------
+      case 2: {
+        const visibleSkills = showAllSkills ? skills : skills.slice(0, 4);
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-gray-800">Select Your Work Details</h2>
-            <p className="text-gray-600">Tell us about your professional background.</p>
+            <div className="text-center">
+              <p className="text-gray-500 text-sm mt-1">Tell us about your professional background.</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div>
@@ -1758,66 +1782,63 @@ const WorkerSignup = () => {
                 </div>
               </div>
 
-              <div ref={skillRef} className="relative">
+              {/* NEW: image-tile skill picker (replaces dropdown checklist) */}
+              <div ref={skillRef}>
                 <label className="block text-sm font-medium mb-1">
-                  Skills {skills.length > 0 && <span className="text-red-500">*</span>}
+                  Skills{" "}
+                  <span className="text-xs font-normal text-gray-500">
+                    (Select at least four skills according to your designation / industry)
+                  </span>
                 </label>
 
-                <div className="relative">
-                  <button
-                    type="button"
-                    disabled={!formData.designation_id}
-                    onClick={() => setShowSkillDropdown((s) => !s)}
-                    className={`w-full border rounded-lg px-4 py-3 text-left flex justify-between items-center ${
-                      !formData.designation_id ? "bg-gray-100 cursor-not-allowed" : "bg-white"
-                    }`}
-                  >
-                    <span>
-                      {!formData.designation_id
-                        ? "Select designation first"
-                        : skillsLoading
-                          ? "Loading..."
-                          : (formData.skills || []).length > 0
-                            ? `${(formData.skills || []).length} skill(s) selected`
-                            : skills.length > 0
-                              ? "Select Skills"
-                              : "No skills available"}
-                    </span>
-                    <span className="text-xs text-gray-500">{showSkillDropdown ? "▲" : "▼"}</span>
-                  </button>
-
-                  {showSkillDropdown && (
-                    <div className="absolute z-50 mt-2 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {skillsLoading ? (
-                        <div className="p-3 text-gray-500">Loading...</div>
-                      ) : skills.length > 0 ? (
-                        skills.map((skill) => (
-                          <label key={skill.id} className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={(formData.skills || []).some((s) => s.id === skill.id)}
-                              onChange={() => toggleSkill(skill)}
-                            />
+                {!formData.designation_id ? (
+                  <div className="border rounded-lg px-4 py-3 text-sm text-gray-400 bg-gray-50">
+                    Select a designation first
+                  </div>
+                ) : skillsLoading ? (
+                  <div className="border rounded-lg px-4 py-3 text-sm text-gray-400">Loading skills...</div>
+                ) : skills.length === 0 ? (
+                  <div className="border rounded-lg px-4 py-3 text-sm text-gray-400">No skills available</div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 border rounded-lg p-3">
+                    {visibleSkills.map((skill) => {
+                      const selected = (formData.skills || []).some((s) => s.id === skill.id);
+                      return (
+                        <button
+                          type="button"
+                          key={skill.id}
+                          onClick={() => toggleSkill(skill)}
+                          className={`rounded-lg overflow-hidden border-2 transition ${
+                            selected ? "border-blue-500 ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <img
+                            src={skill.image_url || "/images/skills/placeholder.png"}
+                            alt={skill.name}
+                            className="w-full h-16 object-cover"
+                          />
+                          <div
+                            className={`text-[11px] leading-tight text-center py-1 px-1 truncate ${
+                              selected ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
                             {skill.name}
-                          </label>
-                        ))
-                      ) : (
-                        <div className="p-3 text-gray-500">No skills found</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {(formData.skills || []).map((skill) => (
-                    <span key={skill.id} className="flex items-center gap-2 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">
-                      {skill.name}
-                      <button type="button" onClick={() => removeSkill(skill.id)} className="text-red-500 font-bold">
-                        ✕
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {!showAllSkills && skills.length > 4 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllSkills(true)}
+                        className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-blue-600 hover:bg-blue-50 py-3"
+                      >
+                        <ChevronDown size={18} />
+                        <span className="text-[11px] mt-1">View more</span>
                       </button>
-                    </span>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {errors.skills && (
                   <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
@@ -1828,194 +1849,116 @@ const WorkerSignup = () => {
             </div>
           </div>
         );
+      }
 
+      // -------- STEP 3: Work Location (editable) --------
       case 3:
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-gray-800">Personal Details</h2>
-            <p className="text-gray-600">KYC and identification information.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="text-center">
+              <p className="text-gray-500 text-sm mt-1">Choose your current location where you're residing.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  Date of Birth <span className="text-red-500">*</span>
+                  State <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="date"
-                    max={new Date().toISOString().split("T")[0]}
-                    value={formData.date_of_birth}
-                    onChange={(e) => handleChange("date_of_birth", e.target.value)}
-                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg ${errors.date_of_birth ? "border-red-500" : "border-gray-300"}`}
-                  />
-                </div>
-                {errors.date_of_birth && (
+                <select
+                  value={formData.state_id}
+                  onChange={(e) => {
+                    handleChange("state_id", e.target.value);
+                    handleChange("city_id", "");
+                    fetchCities(e.target.value);
+                  }}
+                  disabled={statesLoading}
+                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.state_id ? "border-red-500" : "border-gray-300"}`}
+                >
+                  <option value="">Select State</option>
+                  {states.map((state) => (
+                    <option key={state.id} value={state.id}>
+                      {state.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.state_id && (
                   <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.date_of_birth}
+                    <AlertCircle size={14} /> {errors.state_id}
                   </p>
                 )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  Father's Name <span className="text-red-500">*</span>
+                  District <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.city_id}
+                  onChange={(e) => handleChange("city_id", e.target.value)}
+                  disabled={!formData.state_id || citiesLoading[formData.state_id]}
+                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.city_id ? "border-red-500" : "border-gray-300"}`}
+                >
+                  <option value="">Select District</option>
+                  {citiesMap[formData.state_id]?.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.city_id && (
+                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
+                    <AlertCircle size={14} /> {errors.city_id}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Pincode <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  value={formData.father_name}
-                  onChange={(e) => handleChange("father_name", e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.father_name ? "border-red-500" : "border-gray-300"}`}
+                  maxLength={6}
+                  value={formData.working_zip || ""}
+                  onChange={(e) => handleChange("working_zip", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit pincode"
+                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.working_zip ? "border-red-500" : "border-gray-300"}`}
                 />
-                {errors.father_name && (
+                {errors.working_zip && (
                   <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.father_name}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Aadhar Number <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    maxLength={12}
-                    readOnly={aadhaarLocked}
-                    value={formData.aadhar_number}
-                    onChange={(e) => !aadhaarLocked && handleChange("aadhar_number", e.target.value.replace(/\D/g, ""))}
-                    className={`w-full px-3 py-2.5 border rounded-lg ${errors.aadhar_number ? "border-red-500" : "border-gray-300"} ${aadhaarLocked ? "bg-gray-50 pr-9" : ""}`}
-                  />
-                  {aadhaarLocked && <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />}
-                </div>
-                {aadhaarLocked && <p className="text-green-600 text-xs mt-1 flex items-center gap-1"><CheckCircle size={12} /> Verified via Aadhaar OTP</p>}
-                {errors.aadhar_number && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.aadhar_number}
+                    <AlertCircle size={14} /> {errors.working_zip}
                   </p>
                 )}
               </div>
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Address <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={2}
+                value={formData.address_line}
+                onChange={(e) => handleChange("address_line", e.target.value)}
+                className={`w-full px-3 py-2.5 border rounded-lg ${errors.address_line ? "border-red-500" : "border-gray-300"}`}
+              />
+              {errors.address_line && (
+                <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
+                  <AlertCircle size={14} /> {errors.address_line}
+                </p>
+              )}
+            </div>
           </div>
         );
 
+      // -------- STEP 4: Banking Details --------
       case 4:
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-gray-800">Add Your Work Location</h2>
-            <p className="text-gray-600">Choose your current location where you're residing.</p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Work Address <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={formData.address_line}
-                  onChange={(e) => handleChange("address_line", e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.address_line ? "border-red-500" : "border-gray-300"}`}
-                />
-                {errors.address_line && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.address_line}
-                  </p>
-                )}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Work State <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.state_id}
-                    onChange={(e) => {
-                      handleChange("state_id", e.target.value);
-                      handleChange("city_id", "");
-                      fetchCities(e.target.value);
-                    }}
-                    disabled={statesLoading}
-                    className={`w-full px-3 py-2.5 border rounded-lg ${errors.state_id ? "border-red-500" : "border-gray-300"}`}
-                  >
-                    <option value="">Select State</option>
-                    {states.map((state) => (
-                      <option key={state.id} value={state.id}>
-                        {state.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.state_id && (
-                    <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                      <AlertCircle size={14} /> {errors.state_id}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    District <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.city_id}
-                    onChange={(e) => handleChange("city_id", e.target.value)}
-                    disabled={!formData.state_id || citiesLoading[formData.state_id]}
-                    className={`w-full px-3 py-2.5 border rounded-lg ${errors.city_id ? "border-red-500" : "border-gray-300"}`}
-                  >
-                    <option value="">Select District</option>
-                    {citiesMap[formData.state_id]?.map((city) => (
-                      <option key={city.id} value={city.id}>
-                        {city.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.city_id && (
-                    <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                      <AlertCircle size={14} /> {errors.city_id}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Pincode <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={formData.working_zip || ""}
-                    onChange={(e) => handleChange("working_zip", e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="6-digit pincode"
-                    className={`w-full px-3 py-2.5 border rounded-lg ${errors.working_zip ? "border-red-500" : "border-gray-300"}`}
-                  />
-                  {errors.working_zip && (
-                    <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                      <AlertCircle size={14} /> {errors.working_zip}
-                    </p>
-                  )}
-                </div>
-              </div>
+            <div className="text-center">
+              <p className="text-gray-500 text-sm mt-1">
+                You can add your bank details later, but they're required before receiving payments.
+              </p>
             </div>
-          </div>
-        );
-
-      case 5:
-        return (
-          <div className="space-y-6">
-            <div className="flex items-start justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <h2 className="text-xl font-bold text-gray-800">Add Your Banking Details</h2>
-                <p className="text-gray-600">For salary processing and payments.</p>
-              </div>
-              {/* Skip disabled: see file banner (#3) — needs hook + backend change first */}
-              <button
-                type="button"
-                disabled
-                title="Bank details are currently required — Skip will be enabled once optional-KYC support ships"
-                className="px-4 py-1.5 text-sm border border-gray-300 text-gray-400 rounded-lg cursor-not-allowed shrink-0"
-              >
-                Skip
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Account Number <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium mb-1">Account Number (Optional)</label>
                 <input
                   type="text"
                   maxLength={16}
@@ -2030,9 +1973,7 @@ const WorkerSignup = () => {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  IFSC Code <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium mb-1">IFSC Code (Optional)</label>
                 <input
                   type="text"
                   maxLength={15}
@@ -2047,17 +1988,15 @@ const WorkerSignup = () => {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  Account Type <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-sm font-medium mb-1">Account Type (Optional)</label>
                 <select
                   value={formData.account_type}
                   onChange={(e) => handleChange("account_type", e.target.value)}
                   className={`w-full px-3 py-2.5 border rounded-lg ${errors.account_type ? "border-red-500" : "border-gray-300"}`}
                 >
-                  <option value="savings">Savings</option>
-                  <option value="current">Current</option>
-                  <option value="salary">Salary</option>
+                  <option value="savings">Savings account</option>
+                  <option value="current">Current account</option>
+                  <option value="salary">Salary account</option>
                 </select>
                 {errors.account_type && (
                   <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
@@ -2067,19 +2006,15 @@ const WorkerSignup = () => {
               </div>
             </div>
 
-            <div className="bg-gray-50 p-4 rounded-xl border">
-              <label className="block text-sm font-medium mb-2">
-                Referral Code <span className="text-gray-400">(Optional)</span>
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={formData.referral_code || ""}
-                  onChange={(e) => handleChange("referral_code", e.target.value)}
-                  placeholder="Enter referral code"
-                  className="flex-1 px-3 py-2.5 border rounded-lg"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Referral code (Optional)</label>
+              <input
+                type="text"
+                value={formData.referral_code || ""}
+                onChange={(e) => handleChange("referral_code", e.target.value)}
+                placeholder="Enter the referral code"
+                className="w-full px-3 py-2.5 border rounded-lg"
+              />
               {formData.referral_verified && (
                 <p className="text-green-600 text-sm mt-2 flex items-center gap-1">
                   <CheckCircle size={14} /> Referral code verified
@@ -2087,13 +2022,13 @@ const WorkerSignup = () => {
               )}
             </div>
 
-            <div className="bg-gray-50 p-6 rounded-xl border">
+            <div className="space-y-3">
               <div className="flex items-start gap-3 cursor-pointer" onClick={openModal}>
-                <input type="checkbox" checked={formData.accepted_terms} readOnly className="mt-1 w-5 h-5 text-green-600 rounded" />
+                <input type="checkbox" checked={formData.accepted_terms} readOnly className="mt-1 w-5 h-5 text-blue-600 rounded" />
                 <label className="text-sm text-gray-800">
                   I agree to the{" "}
-                  <button type="button" onClick={openModal} className="text-green-600 hover:underline font-semibold">
-                    Terms and Conditions
+                  <button type="button" onClick={openModal} className="text-blue-600 hover:underline font-semibold">
+                    Terms &amp; Conditions
                   </button>
                 </label>
               </div>
@@ -2102,14 +2037,12 @@ const WorkerSignup = () => {
                   <AlertCircle size={14} /> {errors.accepted_terms}
                 </p>
               )}
-            </div>
 
-            <div className="bg-gray-50 p-6 rounded-xl border mt-4">
               <div className="flex items-start gap-3 cursor-pointer" onClick={openPrivacyModal}>
-                <input type="checkbox" checked={formData.accepted_privacy} readOnly className="mt-1 w-5 h-5 text-green-600 rounded" />
+                <input type="checkbox" checked={formData.accepted_privacy} readOnly className="mt-1 w-5 h-5 text-blue-600 rounded" />
                 <label className="text-sm text-gray-800">
                   I agree to the{" "}
-                  <button type="button" onClick={openPrivacyModal} className="text-green-600 hover:underline font-semibold">
+                  <button type="button" onClick={openPrivacyModal} className="text-blue-600 hover:underline font-semibold">
                     Privacy Policy
                   </button>
                 </label>
@@ -2127,6 +2060,7 @@ const WorkerSignup = () => {
         return null;
     }
   };
+  // ===================== END NEW 4-STEP WIZARD BODY =====================
 
   if (profileCompleted) {
     return (
@@ -2181,12 +2115,21 @@ const WorkerSignup = () => {
 
   return pageShell(
     <>
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Worker Registration</h1>
-        <p className="text-gray-600 text-sm">
-          Step {currentStep} of {totalSteps}: {stepTitles[currentStep - 1]}
-        </p>
-      </div>
+      {/* Skip is only meaningful/enabled on the Banking step per the new design */}
+      {currentStep === 4 && (
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => {
+              // TODO(hook): wire to a real "skip banking" action once the hook supports optional KYC.
+              nextStep();
+            }}
+            className="px-4 py-1.5 text-sm border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition"
+          >
+            Skip
+          </button>
+        </div>
+      )}
 
       {stepperHeader}
 
@@ -2194,16 +2137,18 @@ const WorkerSignup = () => {
 
       <div className="flex justify-between items-center pt-4 border-t border-gray-200">
         <button
-          onClick={prevStep}
-          disabled={currentStep <= 1 || loading}
-          className={`flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 ${currentStep === 1 && "cursor-not-allowed"}`}
+          onClick={currentStep === 1 ? handleReviewBack : prevStep}
+          disabled={(currentStep === 1 && basicSubStep === 1) || loading}
+          className={`flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 ${
+            currentStep === 1 && basicSubStep === 1 && "cursor-not-allowed"
+          }`}
         >
-          <ChevronLeft size={18} /> Previous
+          <ChevronLeft size={18} /> Back
         </button>
         <button
-          onClick={nextStep}
+          onClick={currentStep === 1 ? handleReviewContinue : nextStep}
           disabled={loading}
-          className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-green-600 via-teal-600 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-lg disabled:opacity-50"
+          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? (
             <>
@@ -2211,7 +2156,7 @@ const WorkerSignup = () => {
             </>
           ) : (
             <>
-              {currentStep === totalSteps ? "Submit" : "Next"} <ChevronRight size={18} />
+              {currentStep === totalSteps ? "Submit" : "Continue"} <ChevronRight size={18} />
             </>
           )}
         </button>
