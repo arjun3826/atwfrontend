@@ -349,7 +349,19 @@ useEffect(() => {
             otp,
             aadhaarReferenceId
         );
-        if (!res.success) return false;
+        if (!res.success) {
+
+        setAadhaarVerified(false);
+
+        Swal.fire({
+            icon: "error",
+            title: "Invalid OTP",
+            text: res.message,
+        });
+
+        return res;
+    }
+
         const aadhaar = res.data;
         const names = String(aadhaar?.name || "")
           .trim()
