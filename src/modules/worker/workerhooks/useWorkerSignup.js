@@ -33,7 +33,7 @@ export const useWorkerSignup = ({ onSuccess } = {}) => {
   const { refreshAuth } = useAuthContext(); // get refreshAuth at top level
 
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 5;
+  const totalSteps = 4;
   const [profileCompleted, setProfileCompleted] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -50,6 +50,13 @@ export const useWorkerSignup = ({ onSuccess } = {}) => {
     father_name: "",
     aadhar_number: "",
 
+      // NEW: permanent / Aadhaar address (maps to address/state_id/city_id/zip)
+    permanent_address_line: "",
+    permanent_state_id: "",
+    permanent_city_id: "",
+    permanent_zip: "",
+
+    // existing: current/work location (maps to working_address/current_state_id/current_city_id/working_zip)
     address_line: "",
     state_id: "",
     city_id: "",
@@ -173,18 +180,22 @@ export const useWorkerSignup = ({ onSuccess } = {}) => {
 
   // Fetch cities for a state
   const fetchCities = async (stateId) => {
-    if (!stateId || citiesMap[stateId]) return;
-    setCitiesLoading((prev) => ({ ...prev, [stateId]: true }));
-    try {
-      const res = await getCitiesByStateAPI(stateId);
-      const cities = ensureArray(res);
-      setCitiesMap((prev) => ({ ...prev, [stateId]: cities }));
-    } catch (err) {
-      console.error("Failed to fetch cities", err);
-    } finally {
-      setCitiesLoading((prev) => ({ ...prev, [stateId]: false }));
-    }
-  };
+  if (!stateId) return [];
+  if (citiesMap[stateId]) return citiesMap[stateId]; // already cached
+
+  setCitiesLoading((prev) => ({ ...prev, [stateId]: true }));
+  try {
+    const res = await getCitiesByStateAPI(stateId);
+    const cities = ensureArray(res);
+    setCitiesMap((prev) => ({ ...prev, [stateId]: cities }));
+    return cities; // <-- added
+  } catch (err) {
+    console.error("Failed to fetch cities", err);
+    return [];
+  } finally {
+    setCitiesLoading((prev) => ({ ...prev, [stateId]: false }));
+  }
+};
 
   // Initial data load for dropdowns
   useEffect(() => {
@@ -268,10 +279,19 @@ useEffect(() => {
       date_of_birth: user.date_of_birth || "",
       father_name: user.father_name || "",
       aadhar_number: user.aadhaar_number || "",
+
+        // NEW: permanent address from Aadhaar (maps to worker_personal_details.address/state_id/city_id/zip)
+      permanent_address_line: user.address || "",
+      permanent_state_id: user.state_id || "",
+      permanent_city_id: user.city_id || "",
+      permanent_zip: user.zip || "",
+
+      // current work location (unchanged)
       address_line: user.working_address || "",
       state_id: user.current_state_id || "",
       city_id: user.current_city_id || "",
       working_zip: user.working_zip || "",
+
       account_holder_name: user.account_holder_name || "",
       bank_name: user.bank_name || "",
       account_number: user.account_number || "",
@@ -282,9 +302,12 @@ useEffect(() => {
     };
 
     updateFormData(mappedData);
-    if (mappedData.state_id) {
-      fetchCities(mappedData.state_id);
+    if (mappedData.permanent_state_id) {
+      fetchCities(mappedData.permanent_state_id);
     }
+    if (mappedData.state_id) {
+  fetchCities(mappedData.state_id);
+}
 
     let step = 1;
     if (
@@ -351,16 +374,16 @@ useEffect(() => {
         );
         if (!res.success) {
 
-        setAadhaarVerified(false);
+    setAadhaarVerified(false);
 
-        Swal.fire({
-            icon: "error",
-            title: "Invalid OTP",
-            text: res.message,
-        });
+    Swal.fire({
+        icon: "error",
+        title: "Verification Failed",
+        text: res.message || "Unable to verify OTP.",
+    });
 
-        return res;
-    }
+    return res;
+}
 
         const aadhaar = res.data;
         const names = String(aadhaar?.name || "")
@@ -375,9 +398,40 @@ useEffect(() => {
             last_name: names.slice(1).join(" "),
             date_of_birth: normalizeDobToISO(aadhaar?.dob),
             father_name: aadhaar?.father_name || "",
-            address_line: aadhaar?.address || "",
+            permanent_address_line: aadhaar?.address || "",
             aadhar_number: aadharDigits,
+            permanent_zip: aadhaar?.pincode || "",
+            
         });
+        try {
+    const aadhaarStateName = (aadhaar?.state || "").trim().toLowerCase();
+    const aadhaarDistrictName = (aadhaar?.district || "").trim().toLowerCase();
+
+    if (aadhaarStateName) {
+      const matchedState = states.find(
+        (s) => s.name?.trim().toLowerCase() === aadhaarStateName
+      );
+
+      if (matchedState) {
+        updateFormData({ permanent_state_id: matchedState.id });
+
+        // fetchCities populates citiesMap[stateId] and returns the cities array
+        const cities = await fetchCities(matchedState.id);
+        const cityList = cities || citiesMap[matchedState.id] || [];
+
+        if (aadhaarDistrictName && cityList.length) {
+          const matchedCity = cityList.find(
+            (c) => c.name?.trim().toLowerCase() === aadhaarDistrictName
+          );
+          if (matchedCity) {
+            updateFormData({ permanent_city_id: matchedCity.id });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Failed to auto-map Aadhaar state/district", e);
+  }
 
         setAadhaarVerified(true);
         return res;
@@ -472,40 +526,57 @@ const validateStep3 = () => {
   };
 
   const validateStep5 = () => {
-    const errs = {};
-    const accDigits = formData.account_number?.replace(/\D/g, "");
-    if (!formData.account_number)
-      errs.account_number = "Account number is required";
-    else if (accDigits.length < 9 || accDigits.length > 18)
+  const errs = {};
+  if (formData.account_number?.trim()) {
+    const accDigits = formData.account_number.replace(/\D/g, "");
+    if (accDigits.length < 9 || accDigits.length > 18)
       errs.account_number = "Account number must be 9-18 digits";
-    if (!formData.ifsc_code?.trim()) errs.ifsc_code = "IFSC code is required";
-    else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifsc_code.toUpperCase()))
-      errs.ifsc_code = "Invalid IFSC code (e.g. SBIN0123456)";
-    if (!formData.account_type) errs.account_type = "Account type is required";
-    if (!formData.accepted_terms)
-      errs.accepted_terms = "You must accept the terms";
-    if (!formData.accepted_privacy)
-      errs.accepted_privacy = "You must accept the privacy policy";
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
+  }
 
+  if (formData.ifsc_code?.trim()) {
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifsc_code.toUpperCase()))
+      errs.ifsc_code = "Invalid IFSC code (e.g. SBIN0123456)";
+  }
+
+  if (!formData.accepted_terms)
+    errs.accepted_terms = "You must accept the terms";
+  if (!formData.accepted_privacy)
+    errs.accepted_privacy = "You must accept the privacy policy";
+
+  setErrors(errs);
+  return Object.keys(errs).length === 0;
+};
+
+  // const validateCurrentStep = () => {
+  //   switch (currentStep) {
+  //     case 1:
+  //       return validateStep1();
+  //     case 2:
+  //       return validateStep2();
+  //     case 3:
+  //       return validateStep3();
+  //     case 4:
+  //       return validateStep4();
+  //     case 5:
+  //       return validateStep5();
+  //     default:
+  //       return true;
+  //   }
+  // };
   const validateCurrentStep = () => {
-    switch (currentStep) {
-      case 1:
-        return validateStep1();
-      case 2:
-        return validateStep2();
-      case 3:
-        return validateStep3();
-      case 4:
-        return validateStep4();
-      case 5:
-        return validateStep5();
-      default:
-        return true;
-    }
-  };
+  switch (currentStep) {
+    case 1:
+      return validateStep1(); // Basic info
+    case 2:
+      return validateStep2(); // Work Details
+    case 3:
+      return validateStep4(); // Work Location
+    case 4:
+      return validateStep5(); // Banking Details
+    default:
+      return true;
+  }
+};
 
   // ---------- API submissions ----------
   const submitStep1 = async () => {
@@ -640,105 +711,102 @@ const validateStep3 = () => {
   };
 
   const submitCurrentStep = async () => {
-    if (!validateCurrentStep()) return false;
+  if (!validateCurrentStep()) return false;
 
-    const currentToken = Cookies.get("token") || token;
-    if (!currentToken) {
-      Swal.fire({
-        icon: "error",
-        title: "Session Expired",
-        text: "Please start over.",
-      });
-      navigate("/worker/register");
-      return false;
+  const currentToken = Cookies.get("token") || token;
+  if (!currentToken) {
+    Swal.fire({
+      icon: "error",
+      title: "Session Expired",
+      text: "Please start over.",
+    });
+    navigate("/worker/register");
+    return false;
+  }
+
+  setLoading(true);
+  try {
+    let payload = {};
+    if (currentStep === 2) {
+      payload = {
+        industry_id: parseInt(formData.industry_id),
+        designation_id: parseInt(formData.designation_id),
+        ...(formData.skills.length > 0 && {
+          skills: formData.skills.map((s) => s.id),
+        }),
+      };
+    } else if (currentStep === 3) {
+      payload = {
+        working_address: formData.address_line,
+        current_state_id: formData.state_id ? parseInt(formData.state_id) : null,
+        current_city_id: formData.city_id ? parseInt(formData.city_id) : null,
+        working_zip: formData.working_zip,
+      };
+    } else if (currentStep === 4) {
+      payload = {
+        account_holder_name: formData.account_holder_name || null,
+        bank_name: formData.bank_name || null,
+        account_number: formData.account_number
+          ? formData.account_number.replace(/\D/g, "")
+          : null,
+        ifsc_code: formData.ifsc_code ? formData.ifsc_code.toUpperCase() : null,
+        account_type: formData.account_type,
+        accepted_terms: formData.accepted_terms,
+        accepted_privacy: formData.accepted_privacy,
+        ...(formData.referral_code && { agent_code: formData.referral_code }),
+      };
     }
 
-    setLoading(true);
-    try {
-      let payload = {};
-      if (currentStep === 2) {
-        payload = {
-          industry_id: parseInt(formData.industry_id),
-          designation_id: parseInt(formData.designation_id),
-          ...(formData.skills.length > 0 && {
-            skills: formData.skills.map((s) => s.id),
-          }),
-        };
-      } else if (currentStep === 3) {
-        payload = {
-          date_of_birth: formData.date_of_birth,
-          father_name: formData.father_name,
-          aadhar_number: formData.aadhar_number.replace(/\D/g, ""),
-        };
-      } else if (currentStep === 4) {
-        payload = {
-          working_address: formData.address_line,
-          current_state_id: formData.state_id
-            ? parseInt(formData.state_id)
-            : null,
-          current_city_id: formData.city_id ? parseInt(formData.city_id) : null,
-          working_zip: formData.working_zip,
-        };
-      } else if (currentStep === 5) {
-        payload = {
-          account_holder_name: formData.account_holder_name,
-          bank_name: formData.bank_name,
-          account_number: formData.account_number.replace(/\D/g, ""),
-          ifsc_code: formData.ifsc_code.toUpperCase(),
-          account_type: formData.account_type,
-          accepted_terms: formData.accepted_terms,
-          accepted_privacy: formData.accepted_privacy,
-          ...(formData.referral_code && {
-            agent_code: formData.referral_code,
-          }),
-        };
-      }
+    const response = await updateWorkerProfile(payload);
+    const resData = response?.data || response; // unwrap safely
 
-      const response = await updateWorkerProfile(payload);
+    // Normalize possible shapes: resData.profile_status OR resData.data.profile_status
+    const profileStatus =
+      resData?.profile_status || resData?.data?.profile_status || resData?.worker?.profile_status;
 
-      // If profile completed, update cookies and refresh auth context
-      if (response.data?.profile_status === "completed") {
-        // Update user cookie with completed profile data
-        const currentUser = getUserFromCookie() || {};
-        const updatedUser = {
-          ...currentUser,
-          ...response.data.worker,
-          profile_status: "completed",
-        };
-        Cookies.set("user", JSON.stringify(updatedUser), cookieOptions);
-        Cookies.set("profile_status", "completed", cookieOptions);
+    // On the FINAL step, treat it as complete even if the backend
+    // doesn't explicitly say "completed" — as long as the call succeeded.
+    const isFinalStep = currentStep === totalSteps;
+    const shouldMarkComplete = profileStatus === "completed" || isFinalStep;
 
-        // Refresh auth context to pick up new profile_status
-        refreshAuth();
-        setProfileCompleted(true);
-        if (typeof onSuccess === "function") onSuccess();
-        return true;
-        // Navigate to dashboard (user stays logged in)
-        // navigate("/worker/dashboard");
-        // return true;
-      }
+    if (shouldMarkComplete) {
+      const currentUser = getUserFromCookie() || {};
+      const workerData = resData?.worker || resData?.data?.worker || {};
+      const updatedUser = {
+        ...currentUser,
+        ...workerData,
+        profile_status: "completed",
+      };
+      Cookies.set("user", JSON.stringify(updatedUser), cookieOptions);
+      Cookies.set("profile_status", "completed", cookieOptions);
 
-      if (currentStep < totalSteps) {
-        Swal.fire({
-          icon: "success",
-          title: "Progress Saved",
-          text: `Step ${currentStep} completed.`,
-          timer: 1000,
-          showConfirmButton: false,
-        });
-      }
+      refreshAuth();
+      setProfileCompleted(true);
+      if (typeof onSuccess === "function") onSuccess();
       return true;
-    } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: `Step ${currentStep} Failed`,
-        text: error.response?.data?.message || error.message,
-      });
-      return false;
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (currentStep < totalSteps) {
+      Swal.fire({
+        icon: "success",
+        title: "Progress Saved",
+        text: `Step ${currentStep} completed.`,
+        timer: 1000,
+        showConfirmButton: false,
+      });
+    }
+    return true;
+  } catch (error) {
+    Swal.fire({
+      icon: "error",
+      title: `Step ${currentStep} Failed`,
+      text: error.response?.data?.message || error.message,
+    });
+    return false;
+  } finally {
+    setLoading(false);
+  }
+};
 
   const nextStep = async () => {
     if (currentStep === 1) {
