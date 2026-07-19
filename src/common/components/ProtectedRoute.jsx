@@ -33,12 +33,12 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     // }
   }
 
-  if (role === "worker" && profileStatus === "pending") {
-    // Avoid redirect loop if already on the register page
-    if (location.pathname !== "/worker/register") {
-      return <Navigate to="/worker/register" replace />;
-    }
-  }
+  // if (role === "worker" && profileStatus === "pending") {
+  //   // Avoid redirect loop if already on the register page
+  //   if (location.pathname !== "/worker/register") {
+  //     return <Navigate to="/worker/register" replace />;
+  //   }
+  // }
 
   if (role === "agent" && profileStatus === "pending") {
     // Avoid redirect loop if already on the register page
