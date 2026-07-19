@@ -559,7 +559,7 @@ const WorkerLogin = () => {
               </button>
 
               {/* {step === "mobile" && ( */}
-                <p className="text-center text-sm text-gray-600">
+                {/* <p className="text-center text-sm text-gray-600">
                   Don't have an account?{" "}
                   <Link
                     to="/worker/register"
@@ -567,7 +567,7 @@ const WorkerLogin = () => {
                   >
                     Create account
                   </Link>
-                </p>
+                </p> */}
               {/* )} */}
 
               {/* Help & Support */}
