@@ -1040,6 +1040,9 @@ const WorkerSignup = () => {
   const [showSkillDropdown, setShowSkillDropdown] = useState(false); // kept for backward compat, unused by new tile UI
   const [showAllSkills, setShowAllSkills] = useState(false);
   const skillRef = useRef(null);
+  const [locationFetching, setLocationFetching] = useState(false);
+const [locationError, setLocationError] = useState("");
+const [manualLocationMode, setManualLocationMode] = useState(false);
 
   // NEW: local sub-step for the "Review Details" mega-step (screen 1a: identity, screen 1b: address)
   // TODO(hook): once useWorkerSignup exposes a 4-step flow (Review, Work, Location, Banking),
@@ -1072,6 +1075,90 @@ const WorkerSignup = () => {
       (formData.skills || []).filter((s) => s.id !== skillId),
     );
   };
+useEffect(() => {
+  if (currentStep === 3 && !formData.address_line && !manualLocationMode && !locationFetching) {
+    detectCurrentLocation();
+  }
+}, [currentStep]);
+
+  const detectCurrentLocation = async () => {
+  if (!navigator.geolocation) {
+    setLocationError("Location is not supported by your browser.");
+    return;
+  }
+
+  setLocationFetching(true);
+  setLocationError("");
+
+  navigator.geolocation.getCurrentPosition(
+    async ({ coords }) => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}`
+        );
+        const data = await res.json();
+        const address = data.address || {};
+
+        const stateName = address.state || "";
+        const districtName =
+          address.state_district ||
+          address.county ||
+          address.city ||
+          address.town ||
+          "";
+        const pincode = address.postcode || "";
+
+        handleChange("address_line", data.display_name || "");
+        handleChange("working_zip", pincode);
+
+        if (stateName) {
+          const state = states.find(
+            (s) => s.name?.toLowerCase() === stateName.toLowerCase()
+          );
+
+          if (state) {
+            handleChange("state_id", state.id);
+            const cities = await fetchCities(state.id);
+
+            if (districtName && cities?.length) {
+              const city = cities.find(
+                (c) => c.name?.toLowerCase() === districtName.toLowerCase()
+              );
+              if (city) handleChange("city_id", city.id);
+            }
+          }
+        }
+
+        if (!data.display_name) {
+          setLocationError("Could not detect full address. Please try refreshing or enter manually.");
+        }
+      } catch (e) {
+        console.log("Reverse geocoding error:", e);
+        setLocationError("Failed to fetch address details. Please try again or enter manually.");
+      } finally {
+        setLocationFetching(false);
+      }
+    },
+    (err) => {
+      console.log("Geolocation error code:", err.code, "message:", err.message);
+      setLocationFetching(false);
+
+      if (err.code === 1) {
+        setLocationError("Location access denied. Please enable location permission in your browser and refresh, or enter manually.");
+      } else if (err.code === 2) {
+        setLocationError("Location unavailable. Please check your device's GPS/location is turned on, or enter manually.");
+      } else if (err.code === 3) {
+        setLocationError("Location request timed out. Please try again or enter manually.");
+      } else {
+        setLocationError("Unable to get your location. Please try again or enter manually.");
+      }
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+    }
+  );
+};
 
   // ---- Aadhaar gate local UI state (stub flow, see banner above) ----
   const hasToken = !!Cookies.get("token");
@@ -1713,11 +1800,11 @@ const WorkerSignup = () => {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <ReadonlyField label="State" value={states.find((s) => s.id === formData.state_id)?.name} />
-              <ReadonlyField label="District" value={citiesMap[formData.state_id]?.find((c) => c.id === formData.city_id)?.name} />
-              <ReadonlyField label="Pincode" value={formData.working_zip} />
+              <ReadonlyField label="State" value={states.find((s) => s.id === formData.permanent_state_id)?.name} />
+              <ReadonlyField label="District" value={citiesMap[formData.permanent_state_id]?.find((c) => c.id === formData.permanent_city_id)?.name} />
+              <ReadonlyField label="Pincode" value={formData.permanent_zip} />
             </div>
-            <ReadonlyField label="Address" value={formData.address_line} />
+            <ReadonlyField label="Address" value={formData.permanent_address_line} />
           </div>
         );
 
@@ -1784,168 +1871,262 @@ const WorkerSignup = () => {
 
               {/* NEW: image-tile skill picker (replaces dropdown checklist) */}
               <div ref={skillRef}>
-                <label className="block text-sm font-medium mb-1">
-                  Skills{" "}
-                  <span className="text-xs font-normal text-gray-500">
-                    (Select at least four skills according to your designation / industry)
-                  </span>
-                </label>
+  <label className="block text-sm font-medium mb-1">
+    Skills{" "}
+    <span className="text-xs font-normal text-gray-500">
+      (Select at least four skills according to your designation / industry)
+    </span>
+  </label>
 
-                {!formData.designation_id ? (
-                  <div className="border rounded-lg px-4 py-3 text-sm text-gray-400 bg-gray-50">
-                    Select a designation first
-                  </div>
-                ) : skillsLoading ? (
-                  <div className="border rounded-lg px-4 py-3 text-sm text-gray-400">Loading skills...</div>
-                ) : skills.length === 0 ? (
-                  <div className="border rounded-lg px-4 py-3 text-sm text-gray-400">No skills available</div>
-                ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 border rounded-lg p-3">
-                    {visibleSkills.map((skill) => {
-                      const selected = (formData.skills || []).some((s) => s.id === skill.id);
-                      return (
-                        <button
-                          type="button"
-                          key={skill.id}
-                          onClick={() => toggleSkill(skill)}
-                          className={`rounded-lg overflow-hidden border-2 transition ${
-                            selected ? "border-blue-500 ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300"
-                          }`}
-                        >
-                          <img
-                            src={skill.image_url || "/images/skills/placeholder.png"}
-                            alt={skill.name}
-                            className="w-full h-16 object-cover"
-                          />
-                          <div
-                            className={`text-[11px] leading-tight text-center py-1 px-1 truncate ${
-                              selected ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700"
-                            }`}
-                          >
-                            {skill.name}
-                          </div>
-                        </button>
-                      );
-                    })}
-                    {!showAllSkills && skills.length > 4 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllSkills(true)}
-                        className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-blue-600 hover:bg-blue-50 py-3"
-                      >
-                        <ChevronDown size={18} />
-                        <span className="text-[11px] mt-1">View more</span>
-                      </button>
-                    )}
-                  </div>
-                )}
+  {!formData.designation_id ? (
+    <div className="border rounded-lg px-4 py-3 text-sm text-gray-400 bg-gray-50">
+      Select a designation first
+    </div>
+  ) : skillsLoading ? (
+    <div className="border rounded-lg px-4 py-3 text-sm text-gray-400">Loading skills...</div>
+  ) : skills.length === 0 ? (
+    <div className="border rounded-lg px-4 py-3 text-sm text-gray-400">No skills available</div>
+  ) : !showAllSkills ? (
+    // ---- BEFORE "View more": image tiles ----
+    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 border rounded-lg p-3">
+      {visibleSkills.map((skill) => {
+        const selected = (formData.skills || []).some((s) => s.id === skill.id);
+        return (
+          <button
+            type="button"
+            key={skill.id}
+            onClick={() => toggleSkill(skill)}
+            className={`rounded-lg overflow-hidden border-2 transition ${
+              selected ? "border-blue-500 ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <img
+              src={skill.image_url || "/images/skills/placeholder.png"}
+              alt={skill.name}
+              className="w-full h-16 object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.style.display = "none";
+                e.target.nextSibling.style.display = "flex";
+              }}
+            />
+            <div
+              className={`text-[11px] leading-tight text-center py-1 px-1 truncate ${
+                selected ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {skill.name}
+            </div>
+          </button>
+        );
+      })}
+      {skills.length > 4 && (
+        <button
+          type="button"
+          onClick={() => setShowAllSkills(true)}
+          className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-blue-600 hover:bg-blue-50 py-3"
+        >
+          <ChevronDown size={18} />
+          <span className="text-[11px] mt-1">View more</span>
+        </button>
+      )}
+    </div>
+  ) : (
+    // ---- AFTER "View more": text-only pills, all skills ----
+    <div className="flex flex-wrap gap-2 border border-blue-200 rounded-lg p-3">
+      {skills.map((skill) => {
+        const selected = (formData.skills || []).some((s) => s.id === skill.id);
+        return (
+          <button
+            type="button"
+            key={skill.id}
+            onClick={() => toggleSkill(skill)}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-medium transition ${
+              selected
+                ? "bg-blue-600 border-blue-600 text-white"
+                : "bg-white border-gray-300 text-gray-700 hover:border-gray-400"
+            }`}
+          >
+            {skill.name}
+            {selected && <X size={13} />}
+          </button>
+        );
+      })}
+    </div>
+  )}
 
-                {errors.skills && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.skills}
-                  </p>
-                )}
-              </div>
+  {errors.skills && (
+    <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
+      <AlertCircle size={14} /> {errors.skills}
+    </p>
+  )}
+</div>
             </div>
           </div>
         );
       }
 
-      // -------- STEP 3: Work Location (editable) --------
-      case 3:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <p className="text-gray-500 text-sm mt-1">Choose your current location where you're residing.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  State <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.state_id}
-                  onChange={(e) => {
-                    handleChange("state_id", e.target.value);
-                    handleChange("city_id", "");
-                    fetchCities(e.target.value);
-                  }}
-                  disabled={statesLoading}
-                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.state_id ? "border-red-500" : "border-gray-300"}`}
-                >
-                  <option value="">Select State</option>
-                  {states.map((state) => (
-                    <option key={state.id} value={state.id}>
-                      {state.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.state_id && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.state_id}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  District <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.city_id}
-                  onChange={(e) => handleChange("city_id", e.target.value)}
-                  disabled={!formData.state_id || citiesLoading[formData.state_id]}
-                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.city_id ? "border-red-500" : "border-gray-300"}`}
-                >
-                  <option value="">Select District</option>
-                  {citiesMap[formData.state_id]?.map((city) => (
-                    <option key={city.id} value={city.id}>
-                      {city.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.city_id && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.city_id}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Pincode <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={formData.working_zip || ""}
-                  onChange={(e) => handleChange("working_zip", e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="6-digit pincode"
-                  className={`w-full px-3 py-2.5 border rounded-lg ${errors.working_zip ? "border-red-500" : "border-gray-300"}`}
-                />
-                {errors.working_zip && (
-                  <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                    <AlertCircle size={14} /> {errors.working_zip}
-                  </p>
-                )}
-              </div>
+     // -------- STEP 3: Work Location (auto-detected, with manual fallback) --------
+case 3:
+  return (
+    <div className="space-y-6">
+      <div className="text-center">
+        <p className="text-gray-500 text-sm mt-1">
+          {manualLocationMode
+            ? "Please enter your current work location."
+            : "Your current location has been detected automatically."}
+        </p>
+      </div>
+
+      {!manualLocationMode && (
+        <div className="flex justify-end mb-4">
+          <button
+            type="button"
+            onClick={detectCurrentLocation}
+            disabled={locationFetching}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg"
+          >
+            {locationFetching ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Detecting...
+              </>
+            ) : (
+              "📍 Refresh Current Location"
+            )}
+          </button>
+        </div>
+      )}
+
+      {locationError && !manualLocationMode && (
+        <div className="space-y-2">
+          <p className="text-red-500 text-sm flex items-center gap-1">
+            <AlertCircle size={14} /> {locationError}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setManualLocationMode(true);
+              setLocationError("");
+            }}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Enter address manually instead
+          </button>
+        </div>
+      )}
+
+      {!manualLocationMode ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ReadonlyField label="State" value={states.find((s) => s.id === formData.state_id)?.name} />
+            <ReadonlyField label="District" value={citiesMap[formData.state_id]?.find((c) => c.id === formData.city_id)?.name} />
+            <ReadonlyField label="Pincode" value={formData.working_zip} />
+          </div>
+          <ReadonlyField label="Address" value={formData.address_line} />
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                State <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.state_id}
+                onChange={(e) => {
+                  handleChange("state_id", e.target.value);
+                  handleChange("city_id", "");
+                  fetchCities(e.target.value);
+                }}
+                disabled={statesLoading}
+                className={`w-full px-3 py-2.5 border rounded-lg ${errors.state_id ? "border-red-500" : "border-gray-300"}`}
+              >
+                <option value="">Select State</option>
+                {states.map((state) => (
+                  <option key={state.id} value={state.id}>
+                    {state.name}
+                  </option>
+                ))}
+              </select>
+              {errors.state_id && (
+                <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
+                  <AlertCircle size={14} /> {errors.state_id}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
-                Address <span className="text-red-500">*</span>
+                District <span className="text-red-500">*</span>
               </label>
-              <textarea
-                rows={2}
-                value={formData.address_line}
-                onChange={(e) => handleChange("address_line", e.target.value)}
-                className={`w-full px-3 py-2.5 border rounded-lg ${errors.address_line ? "border-red-500" : "border-gray-300"}`}
-              />
-              {errors.address_line && (
+              <select
+                value={formData.city_id}
+                onChange={(e) => handleChange("city_id", e.target.value)}
+                disabled={!formData.state_id || citiesLoading[formData.state_id]}
+                className={`w-full px-3 py-2.5 border rounded-lg ${errors.city_id ? "border-red-500" : "border-gray-300"}`}
+              >
+                <option value="">Select District</option>
+                {citiesMap[formData.state_id]?.map((city) => (
+                  <option key={city.id} value={city.id}>
+                    {city.name}
+                  </option>
+                ))}
+              </select>
+              {errors.city_id && (
                 <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
-                  <AlertCircle size={14} /> {errors.address_line}
+                  <AlertCircle size={14} /> {errors.city_id}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Pincode <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                maxLength={6}
+                value={formData.working_zip || ""}
+                onChange={(e) => handleChange("working_zip", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6-digit pincode"
+                className={`w-full px-3 py-2.5 border rounded-lg ${errors.working_zip ? "border-red-500" : "border-gray-300"}`}
+              />
+              {errors.working_zip && (
+                <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
+                  <AlertCircle size={14} /> {errors.working_zip}
                 </p>
               )}
             </div>
           </div>
-        );
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Address <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={2}
+              value={formData.address_line}
+              onChange={(e) => handleChange("address_line", e.target.value)}
+              className={`w-full px-3 py-2.5 border rounded-lg ${errors.address_line ? "border-red-500" : "border-gray-300"}`}
+            />
+            {errors.address_line && (
+              <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
+                <AlertCircle size={14} /> {errors.address_line}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setManualLocationMode(false);
+              detectCurrentLocation();
+            }}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            ← Try detecting location again
+          </button>
+        </>
+      )}
+    </div>
+  );
 
       // -------- STEP 4: Banking Details --------
       case 4:
