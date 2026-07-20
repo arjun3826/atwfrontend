@@ -1094,7 +1094,7 @@ useEffect(() => {
     async ({ coords }) => {
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}`
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=en&lat=${coords.latitude}&lon=${coords.longitude}`
         );
         const data = await res.json();
         const address = data.address || {};
