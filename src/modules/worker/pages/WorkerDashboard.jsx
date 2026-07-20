@@ -1343,8 +1343,8 @@ const WorkerDashboard = () => {
           </div>
         </div>
 
-        {/* {activeTab === "jobs" && renderJobsView()} */}
-        {activeTab === "jobs" &&
+        {activeTab === "jobs" && renderJobsView()}
+        {/* {activeTab === "jobs" &&
           (profile?.kyc_approved ? (
             renderJobsView()
           ) : (
@@ -1364,9 +1364,9 @@ const WorkerDashboard = () => {
                 </p>
               </div>
             </div>
-          ))}
-        {/* {activeTab === "wallet" && renderWalletView()} */}
-        {activeTab === "wallet" &&
+          ))} */}
+        {activeTab === "wallet" && renderWalletView()}
+        {/* {activeTab === "wallet" &&
           (profile?.kyc_approved ? (
             renderWalletView()
           ) : (
@@ -1386,7 +1386,7 @@ const WorkerDashboard = () => {
                 </p>
               </div>
             </div>
-          ))}
+          ))} */}
         {activeTab === "documents" && renderDocumentsView()}
       </div>
 
