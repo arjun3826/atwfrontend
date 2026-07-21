@@ -11,6 +11,12 @@ export const getIndustriesAPI = async (params = {}) => {
   return response.data;
 };
 
+// ==================== GST VERIFICATION API ====================
+export const verifyGstNumberAPI = async (gstin) => {
+  const response = await axiosInstance.post("/company/gst-verify", { gstin });
+  return response.data; // { success, message, data: { company_name, gst_number, pan_number, state, ... } }
+};
+
 // ==================== AUTHENTICATION API ====================
 
 // Login company
