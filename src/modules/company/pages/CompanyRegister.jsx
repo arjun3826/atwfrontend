@@ -2263,8 +2263,8 @@
 
 // export default CompanyRegister;
 
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Building,
   User,
@@ -2300,6 +2300,7 @@ const CompanyRegister = () => {
     handleIndustryChange,
     selectedIndustryId,
     industriesLoading,
+    profileCompleted,
     nextStep,
     prevStep,
     goToStep,
@@ -2321,6 +2322,7 @@ const CompanyRegister = () => {
   const [supportEmail, setSupportEmail] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     setLogoUrl(Cookies.get("logo_url") || "");
@@ -2336,55 +2338,97 @@ const CompanyRegister = () => {
   const [gstError, setGstError] = useState("");
   const [gstBusy, setGstBusy] = useState(false);
   const [showGstSuccessToast, setShowGstSuccessToast] = useState(false);
+  const [locationFetching, setLocationFetching] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const [manualLocationMode, setManualLocationMode] = useState(false);
+  const privacyContentRef = useRef(null);
 
-  const mockVerifyGst = (gst) =>
-    new Promise((resolve) =>
-      setTimeout(() => {
-        resolve({
-          success: true,
-          data: {
-            company_name: "Avalanche Pvt. Ltd",
-            company_phone: "8292355559",
-            email: "23/07/2001", // TODO: replace mock — obviously should be a real email from your API
-            gst_number: gst,
-          },
-        });
-      }, 900),
+
+  useEffect(() => {
+    if (currentStep === 3 && !formData.address_line && !manualLocationMode && !locationFetching) {
+      detectCurrentLocation();
+    }
+  }, [currentStep]);
+
+  const detectCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      setLocationError("Location is not supported by your browser.");
+      return;
+    }
+
+    setLocationFetching(true);
+    setLocationError("");
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=en&lat=${coords.latitude}&lon=${coords.longitude}`
+          );
+          const data = await res.json();
+          const address = data.address || {};
+
+          const stateName = address.state || "";
+          const districtName =
+            address.state_district ||
+            address.county ||
+            address.city ||
+            address.town ||
+            "";
+          const pincode = address.postcode || "";
+
+          updatePrimaryAddress("address", data.display_name || "");
+          updatePrimaryAddress("zip", pincode);
+
+          if (stateName) {
+            const state = states.find(
+              (s) => s.name?.toLowerCase() === stateName.toLowerCase()
+            );
+
+            if (state) {
+              updatePrimaryAddress("state_id", state.id);
+              const cities = await fetchCities(state.id);
+
+              if (districtName && cities?.length) {
+                const city = cities.find(
+                  (c) => c.name?.toLowerCase() === districtName.toLowerCase()
+                );
+                if (city) updatePrimaryAddress("city_id", city.id);
+              }
+            }
+          }
+
+          if (!data.display_name) {
+            setLocationError("Could not detect full address. Please try refreshing or enter manually.");
+          }
+        } catch (e) {
+          console.log("Reverse geocoding error:", e);
+          setLocationError("Failed to fetch address details. Please try again or enter manually.");
+        } finally {
+          setLocationFetching(false);
+        }
+      },
+      (err) => {
+        console.log("Geolocation error code:", err.code, "message:", err.message);
+        setLocationFetching(false);
+
+        if (err.code === 1) {
+          setLocationError("Location access denied. Please enable location permission in your browser and refresh, or enter manually.");
+        } else if (err.code === 2) {
+          setLocationError("Location unavailable. Please check your device's GPS/location is turned on, or enter manually.");
+        } else if (err.code === 3) {
+          setLocationError("Location request timed out. Please try again or enter manually.");
+        } else {
+          setLocationError("Unable to get your location. Please try again or enter manually.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+      }
     );
+  };
 
-  // const onSubmitGst = async (e) => {
-  //   e.preventDefault();
-  //   const value = gstInput.trim().toUpperCase();
-  //   if (value.length !== 15) {
-  //     setGstError("Enter a valid 15-digit GST number");
-  //     return;
-  //   }
-  //   setGstError("");
-  //   setGstBusy(true);
-  //   setGstStage("verifying");
-
-  //   const runVerification =
-  //     typeof verifyGstNumber === "function" ? verifyGstNumber : mockVerifyGst;
-  //   const res = await runVerification(value);
-
-  //   setGstBusy(false);
-
-  //   if (res?.success) {
-  //     const d = res.data || {};
-  //     handleChange("company_name", d.company_name || "");
-  //     handleChange("company_phone", d.company_phone || "");
-  //     handleChange("email", d.email || "");
-  //     handleChange("gst_number", d.gst_number || value);
-  //     setShowGstSuccessToast(true);
-  //     setTimeout(() => {
-  //       setShowGstSuccessToast(false);
-  //       setGstStage("done");
-  //     }, 1500);
-  //   } else {
-  //     setGstStage("input");
-  //     setGstError(res?.message || "Could not verify this GST number");
-  //   }
-  // };
   const onSubmitGst = async (e) => {
     e.preventDefault();
     const value = gstInput.trim().toUpperCase();
@@ -2394,9 +2438,9 @@ const CompanyRegister = () => {
     }
     setGstError("");
     setGstStage("verifying");
- 
+
     const res = await verifyGstNumber(value);
- 
+
     if (res?.success) {
       setShowGstSuccessToast(true);
       setTimeout(() => {
@@ -2453,6 +2497,12 @@ const CompanyRegister = () => {
   const openPrivacyModal = () => {
     setShowPrivacyModal(true);
     setPrivacyHasScrolledToBottom(false);
+    setTimeout(() => {
+      const el = privacyContentRef.current;
+      if (el && el.scrollHeight <= el.clientHeight) {
+        setPrivacyHasScrolledToBottom(true);
+      }
+    }, 0);
   };
   const closePrivacyModal = () => setShowPrivacyModal(false);
   const handlePrivacyModalScroll = (e) => {
@@ -2516,24 +2566,6 @@ const CompanyRegister = () => {
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        // return (
-        //   <div className="space-y-6">
-        //     <div className="text-center">
-        //       <h2 className="text-xl font-bold text-gray-800">Basic Company Details</h2>
-        //       <p className="text-gray-500 text-sm mt-1">
-        //         The following details have been securely retrieved via GST No.
-        //         <br />
-        //         Please review them before continuing.
-        //       </p>
-        //     </div>
-        //     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        //       <ReadonlyField icon={<Building size={16} />} label="Company Name" value={formData.company_name} />
-        //       <ReadonlyField icon={<Phone size={16} />} label="Company Phone" value={formData.company_phone} />
-        //       <ReadonlyField icon={<FileText size={16} />} label="GST No" value={maskedGst} verified />
-        //       <ReadonlyField icon={<Mail size={16} />} label="Company Email" value={formData.email} />
-        //     </div>
-        //   </div>
-        // );
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -2547,7 +2579,7 @@ const CompanyRegister = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ReadonlyField icon={<Building size={16} />} label="Company Name" value={formData.company_name} />
               <ReadonlyField icon={<FileText size={16} />} label="GST No" value={maskedGst} verified />
- 
+
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Company Phone <span className="text-red-500">*</span>
@@ -2561,9 +2593,8 @@ const CompanyRegister = () => {
                     onChange={(e) => handleChange("company_phone", e.target.value.replace(/\D/g, ""))}
                     disabled={loading}
                     placeholder="10-digit phone number"
-                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${
-                      errors.company_phone ? "border-red-500" : "border-gray-300"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.company_phone ? "border-red-500" : "border-gray-300"
+                      }`}
                   />
                 </div>
                 {errors.company_phone && (
@@ -2572,7 +2603,7 @@ const CompanyRegister = () => {
                   </p>
                 )}
               </div>
- 
+
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Company Email <span className="text-red-500">*</span>
@@ -2585,9 +2616,8 @@ const CompanyRegister = () => {
                     onChange={(e) => handleChange("email", e.target.value)}
                     disabled={loading}
                     placeholder="Enter company email"
-                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${
-                      errors.email ? "border-red-500" : "border-gray-300"
-                    }`}
+                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.email ? "border-red-500" : "border-gray-300"
+                      }`}
                   />
                 </div>
                 {errors.email && (
@@ -2596,7 +2626,7 @@ const CompanyRegister = () => {
                   </p>
                 )}
               </div>
- 
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-1">
                   Industry <span className="text-red-500">*</span>
@@ -2605,9 +2635,8 @@ const CompanyRegister = () => {
                   value={selectedIndustryId}
                   onChange={(e) => handleIndustryChange(e.target.value)}
                   disabled={loading || industriesLoading}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${
-                    errors.industry_id ? "border-red-500" : "border-gray-300"
-                  }`}
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.industry_id ? "border-red-500" : "border-gray-300"
+                    }`}
                 >
                   <option value="">Select Industry</option>
                   {industries.map((ind) => (
@@ -2732,89 +2761,150 @@ const CompanyRegister = () => {
               <h2 className="text-xl font-bold text-gray-800">Add Company's Working Address</h2>
               <p className="text-gray-500 text-sm mt-1">This is the working address that is used during vacancy creation</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Street Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={primaryAddress.address}
-                  onChange={(e) => updatePrimaryAddress("address", e.target.value)}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_address ? "border-red-500" : "border-gray-300"}`}
-                />
-                {errors.address_0_address && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_address}
-                  </p>
-                )}
+            {!manualLocationMode && (
+              <div className="flex justify-end mb-4">
+                <button
+                  type="button"
+                  onClick={detectCurrentLocation}
+                  disabled={locationFetching}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg"
+                >
+                  {locationFetching ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Detecting...
+                    </>
+                  ) : (
+                    "📍 Refresh Current Location"
+                  )}
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  PIN Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={primaryAddress.zip}
-                  onChange={(e) => updatePrimaryAddress("zip", e.target.value.replace(/\D/g, ""))}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_zip ? "border-red-500" : "border-gray-300"}`}
-                />
-                {errors.address_0_zip && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_zip}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  State <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={primaryAddress.state_id}
-                  onChange={(e) => {
-                    updatePrimaryAddress("state_id", e.target.value);
-                    fetchCities(e.target.value);
+            )}
+            {locationError && !manualLocationMode && (
+              <div className="space-y-2">
+                <p className="text-red-500 text-sm flex items-center gap-1">
+                  <AlertCircle size={14} /> {locationError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualLocationMode(true);
+                    setLocationError("");
                   }}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_state_id ? "border-red-500" : "border-gray-300"}`}
+                  className="text-sm text-blue-600 hover:underline"
                 >
-                  <option value="">Select State</option>
-                  {states.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.address_0_state_id && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_state_id}
-                  </p>
-                )}
+                  Enter address manually instead
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  District <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={primaryAddress.city_id}
-                  onChange={(e) => updatePrimaryAddress("city_id", e.target.value)}
-                  disabled={!primaryAddress.state_id || citiesLoading[primaryAddress.state_id]}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_city_id ? "border-red-500" : "border-gray-300"}`}
+            )}
+            {!manualLocationMode ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ReadonlyField label="Street Address" value={primaryAddress.address} />
+                  <ReadonlyField label="PIN Code" value={primaryAddress.zip} />
+                  <ReadonlyField label="State" value={states.find((s) => s.id == primaryAddress.state_id)?.name} />
+                  <ReadonlyField label="District" value={citiesMap[primaryAddress.state_id]?.find((c) => c.id == primaryAddress.city_id)?.name || ""} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Street Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={primaryAddress.address}
+                      onChange={(e) => updatePrimaryAddress("address", e.target.value)}
+                      className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_address ? "border-red-500" : "border-gray-300"}`}
+                    />
+                    {errors.address_0_address && (
+                      <p className="text-red-500 text-sm mt-1">
+                        <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_address}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      PIN Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={primaryAddress.zip}
+                      onChange={(e) => updatePrimaryAddress("zip", e.target.value.replace(/\D/g, ""))}
+                      className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_zip ? "border-red-500" : "border-gray-300"}`}
+                    />
+                    {errors.address_0_zip && (
+                      <p className="text-red-500 text-sm mt-1">
+                        <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_zip}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      State <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={primaryAddress.state_id}
+                      onChange={(e) => {
+                        updatePrimaryAddress("state_id", e.target.value);
+                        fetchCities(e.target.value);
+                      }}
+                      className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_state_id ? "border-red-500" : "border-gray-300"}`}
+                    >
+                      <option value="">Select State</option>
+                      {states.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.address_0_state_id && (
+                      <p className="text-red-500 text-sm mt-1">
+                        <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_state_id}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      District <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={primaryAddress.city_id}
+                      onChange={(e) => updatePrimaryAddress("city_id", e.target.value)}
+                      disabled={!primaryAddress.state_id || citiesLoading[primaryAddress.state_id]}
+                      className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_city_id ? "border-red-500" : "border-gray-300"}`}
+                    >
+                      <option value="">Select District</option>
+                      {citiesMap[primaryAddress.state_id]?.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.address_0_city_id && (
+                      <p className="text-red-500 text-sm mt-1">
+                        <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_city_id}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualLocationMode(false);
+                    detectCurrentLocation();
+                  }}
+                  className="text-sm text-blue-600 hover:underline"
                 >
-                  <option value="">Select District</option>
-                  {citiesMap[primaryAddress.state_id]?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.address_0_city_id && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_city_id}
-                  </p>
-                )}
-              </div>
-            </div>
+                  ← Try detecting location again
+                </button>
+              </>
+            )}
+
           </div>
         );
 
@@ -2959,9 +3049,8 @@ const CompanyRegister = () => {
                       onChange={(e) => setGstInput(e.target.value.toUpperCase())}
                       placeholder="Enter your 15-digit company GST number"
                       disabled={gstStage === "verifying"}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition ${
-                        gstError ? "border-red-500" : "border-gray-300 hover:border-gray-400"
-                      }`}
+                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 transition ${gstError ? "border-red-500" : "border-gray-300 hover:border-gray-400"
+                        }`}
                     />
                     {gstError && (
                       <p className="text-red-500 text-sm flex items-center mt-1 gap-1">
@@ -3020,7 +3109,7 @@ const CompanyRegister = () => {
                 </form>
               </div>
               <div className="hidden md:flex items-center justify-center bg-blue-50/40 p-8">
-                <img src="/images/company/registration_portal.png" alt="Company Registration Portal"  />
+                <img src="/images/company/registration_portal.png" alt="Company Registration Portal" />
               </div>
             </div>
 
@@ -3053,6 +3142,54 @@ const CompanyRegister = () => {
             `}</style>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (profileCompleted) {
+    return (
+      <div className="min-h-screen bg-white">
+        <div className="w-full max-w-6xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {logoUrl ? <img src={logoUrl} alt="Logo" className="h-10" /> : <img src="/images/logo.png" alt="Logo" className="h-10" />}
+            </div>
+            <div className="flex items-center gap-3 text-gray-800 font-semibold">
+              <span>Hi, {formData.owner_name || "Company"}</span>
+              <div className="w-10 h-10 rounded-full border-2 border-blue-500 flex items-center justify-center">
+                <User size={20} className="text-blue-500" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full max-w-6xl mx-auto px-6 pb-10">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 md:p-12 grid grid-cols-1 md:grid-cols-2 gap-10 min-h-[520px]">
+            <div className="flex flex-col justify-center">
+              <h1 className="text-3xl font-bold text-green-600 leading-tight">Account Created Successfully!</h1>
+              <p className="text-gray-600 mt-3 max-w-md">
+                Your worker account is ready.
+                <br />
+                Start applying for jobs and managing your work.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate("/company/dashboard")}
+                className="mt-8 inline-flex items-center justify-center gap-3 px-8 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold w-full sm:w-64"
+              >
+                Find Jobs <ChevronRight size={18} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center">
+              <img
+                src="/images/company/company_wizard_complete.png"
+                alt="Company"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -3204,7 +3341,7 @@ const CompanyRegister = () => {
                 <X size={24} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-gray-700" onScroll={handlePrivacyModalScroll}>
+            <div ref={privacyContentRef} className="flex-1 overflow-y-auto p-6 space-y-4 text-gray-700" onScroll={handlePrivacyModalScroll}>
               <p>
                 Anytime Work ("ATW") is committed to protecting your company's information and maintaining the
                 confidentiality of business and workforce data.
