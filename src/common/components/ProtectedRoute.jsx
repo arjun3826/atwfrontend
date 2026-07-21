@@ -46,12 +46,12 @@ export default function ProtectedRoute({ children, allowedRoles }) {
       return <Navigate to="/agent/register" replace />;
     }
   }
-  if (role === "company" && profileStatus === "pending") {
-    // Avoid redirect loop if already on the register page
-    if (location.pathname !== "/company/register") {
-      return <Navigate to="/company/register" replace />;
-    }
-  }
+  // if (role === "company" && profileStatus === "pending") {
+  //   // Avoid redirect loop if already on the register page
+  //   if (location.pathname !== "/company/register") {
+  //     return <Navigate to="/company/register" replace />;
+  //   }
+  // }
 
   // NEW: Check if user is trying to access wrong module
   const currentModule = location.pathname.split("/")[1] || ""; // 'admin', 'company', or ''

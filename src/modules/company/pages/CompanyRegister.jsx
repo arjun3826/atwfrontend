@@ -2296,6 +2296,10 @@ const CompanyRegister = () => {
     citiesMap,
     citiesLoading,
     handleChange,
+    industries,
+    handleIndustryChange,
+    selectedIndustryId,
+    industriesLoading,
     nextStep,
     prevStep,
     goToStep,
@@ -2348,6 +2352,39 @@ const CompanyRegister = () => {
       }, 900),
     );
 
+  // const onSubmitGst = async (e) => {
+  //   e.preventDefault();
+  //   const value = gstInput.trim().toUpperCase();
+  //   if (value.length !== 15) {
+  //     setGstError("Enter a valid 15-digit GST number");
+  //     return;
+  //   }
+  //   setGstError("");
+  //   setGstBusy(true);
+  //   setGstStage("verifying");
+
+  //   const runVerification =
+  //     typeof verifyGstNumber === "function" ? verifyGstNumber : mockVerifyGst;
+  //   const res = await runVerification(value);
+
+  //   setGstBusy(false);
+
+  //   if (res?.success) {
+  //     const d = res.data || {};
+  //     handleChange("company_name", d.company_name || "");
+  //     handleChange("company_phone", d.company_phone || "");
+  //     handleChange("email", d.email || "");
+  //     handleChange("gst_number", d.gst_number || value);
+  //     setShowGstSuccessToast(true);
+  //     setTimeout(() => {
+  //       setShowGstSuccessToast(false);
+  //       setGstStage("done");
+  //     }, 1500);
+  //   } else {
+  //     setGstStage("input");
+  //     setGstError(res?.message || "Could not verify this GST number");
+  //   }
+  // };
   const onSubmitGst = async (e) => {
     e.preventDefault();
     const value = gstInput.trim().toUpperCase();
@@ -2356,21 +2393,11 @@ const CompanyRegister = () => {
       return;
     }
     setGstError("");
-    setGstBusy(true);
     setGstStage("verifying");
-
-    const runVerification =
-      typeof verifyGstNumber === "function" ? verifyGstNumber : mockVerifyGst;
-    const res = await runVerification(value);
-
-    setGstBusy(false);
-
+ 
+    const res = await verifyGstNumber(value);
+ 
     if (res?.success) {
-      const d = res.data || {};
-      handleChange("company_name", d.company_name || "");
-      handleChange("company_phone", d.company_phone || "");
-      handleChange("email", d.email || "");
-      handleChange("gst_number", d.gst_number || value);
       setShowGstSuccessToast(true);
       setTimeout(() => {
         setShowGstSuccessToast(false);
@@ -2489,21 +2516,112 @@ const CompanyRegister = () => {
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
+        // return (
+        //   <div className="space-y-6">
+        //     <div className="text-center">
+        //       <h2 className="text-xl font-bold text-gray-800">Basic Company Details</h2>
+        //       <p className="text-gray-500 text-sm mt-1">
+        //         The following details have been securely retrieved via GST No.
+        //         <br />
+        //         Please review them before continuing.
+        //       </p>
+        //     </div>
+        //     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        //       <ReadonlyField icon={<Building size={16} />} label="Company Name" value={formData.company_name} />
+        //       <ReadonlyField icon={<Phone size={16} />} label="Company Phone" value={formData.company_phone} />
+        //       <ReadonlyField icon={<FileText size={16} />} label="GST No" value={maskedGst} verified />
+        //       <ReadonlyField icon={<Mail size={16} />} label="Company Email" value={formData.email} />
+        //     </div>
+        //   </div>
+        // );
         return (
           <div className="space-y-6">
             <div className="text-center">
               <h2 className="text-xl font-bold text-gray-800">Basic Company Details</h2>
               <p className="text-gray-500 text-sm mt-1">
-                The following details have been securely retrieved via GST No.
+                Company name has been retrieved from your GST number.
                 <br />
-                Please review them before continuing.
+                Please add your phone number, email, and industry to continue.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ReadonlyField icon={<Building size={16} />} label="Company Name" value={formData.company_name} />
-              <ReadonlyField icon={<Phone size={16} />} label="Company Phone" value={formData.company_phone} />
               <ReadonlyField icon={<FileText size={16} />} label="GST No" value={maskedGst} verified />
-              <ReadonlyField icon={<Mail size={16} />} label="Company Email" value={formData.email} />
+ 
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Company Phone <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={formData.company_phone}
+                    onChange={(e) => handleChange("company_phone", e.target.value.replace(/\D/g, ""))}
+                    disabled={loading}
+                    placeholder="10-digit phone number"
+                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${
+                      errors.company_phone ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                </div>
+                {errors.company_phone && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <AlertCircle size={14} className="mr-1" /> {errors.company_phone}
+                  </p>
+                )}
+              </div>
+ 
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Company Email <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleChange("email", e.target.value)}
+                    disabled={loading}
+                    placeholder="Enter company email"
+                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${
+                      errors.email ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <AlertCircle size={14} className="mr-1" /> {errors.email}
+                  </p>
+                )}
+              </div>
+ 
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">
+                  Industry <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedIndustryId}
+                  onChange={(e) => handleIndustryChange(e.target.value)}
+                  disabled={loading || industriesLoading}
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${
+                    errors.industry_id ? "border-red-500" : "border-gray-300"
+                  }`}
+                >
+                  <option value="">Select Industry</option>
+                  {industries.map((ind) => (
+                    <option key={ind.id} value={ind.id}>
+                      {ind.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.industry_id && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <AlertCircle size={14} className="mr-1" /> {errors.industry_id}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         );

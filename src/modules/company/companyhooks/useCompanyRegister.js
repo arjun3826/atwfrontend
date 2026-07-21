@@ -7,6 +7,7 @@ import {
   getIndustriesAPI,
   getStatesAPI,
   getCitiesByStateAPI,
+  verifyGstNumberAPI
 } from "../../../api/company/companyAuthAPI";
 import Cookies from "js-cookie";
 import { useAuthContext } from "../../../common/context/AuthContext";
@@ -115,6 +116,29 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     clearFieldError("industry_id");
   };
 
+  // ---------- GST Verification ----------
+  // Calls CompanyController@verifyGstin via POST /company/gst-verify
+  // NOTE: Sandbox's verify_gstin endpoint only returns legalName/pan/state/status —
+  // no phone or email — so those two fields stay blank and must still be filled in manually.
+  const verifyGstNumber = async (gstin) => {
+    try {
+      const res = await verifyGstNumberAPI(gstin);
+      if (res?.success) {
+        updateFormData({
+          company_name: res.data.company_name || "",
+          gst_number: res.data.gst_number || gstin,
+          pan_number: res.data.pan_number || "",
+        });
+      }
+      return res;
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error.response?.data?.message || "Could not verify this GST number",
+      };
+    }
+  };
   // ---------- API Fetchers ----------
   const fetchIndustries = async () => {
     setIndustriesLoading(true);
@@ -225,6 +249,7 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     const errs = {};
     if (!formData.company_name?.trim())
       errs.company_name = "Company name is required";
+    if (!formData.gst_number?.trim()) errs.gst_number = "GST number is required";
     if (!formData.email?.trim()) errs.email = "Company email is required";
     else if (!/\S+@\S+\.\S+/.test(formData.email))
       errs.email = "Email is invalid";
@@ -353,6 +378,7 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     try {
       const payload = {
         company_name: formData.company_name,
+        gst_number: formData.gst_number,
         email: formData.email,
         company_phone: formData.company_phone.replace(/\D/g, ""),
         industry_id: formData.industry_id,
@@ -747,5 +773,6 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     prevStep,
     goToStep,
     fetchCities,
+    verifyGstNumber
   };
 };
