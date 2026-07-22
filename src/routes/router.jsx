@@ -50,6 +50,7 @@ import AdminWorkerWallet from "../modules/admin/pages/worker/AdminWorkerWallet";
 import AdminWorkerHistory from "../modules/admin/pages/worker/AdminWorkerHistory";
 import AdminForgotPassword from "../modules/admin/pages/AdminForgotPassword";
 import AdminResetPassword from "../modules/admin/pages/AdminResetPassword";
+import AdminVerifyOtp from "../modules/admin/pages/AdminOtpVerify";
 import AllVacancy from "../modules/admin/pages/all-vacancy/AllVacancy";
 import AdminAddVacancy from "../modules/admin/pages/all-vacancy/AddVacancy";
 import AdminEditVacancy from "../modules/admin/pages/all-vacancy/EditVacancy";
@@ -178,6 +179,7 @@ const router = createBrowserRouter([
   {path: "/FaceAttendance",element: <FaceAttendanceScanner companyId="COMP-001" />},
   { path: "/admin/forgot-password", element: <AdminForgotPassword /> },
   { path: "/admin/reset-password", element: <AdminResetPassword /> },
+  { path: "/admin/verify-otp", element: <AdminVerifyOtp /> },
   {
     path: "/admin",
     element: (
