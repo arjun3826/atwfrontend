@@ -7,6 +7,24 @@ export const adminLoginAPI = async (username, password) => {
   });
   return response.data;
 };
+// ==================== OTP VERIFICATION ====================
+ 
+// Verify OTP after login step (returns token + user on success)
+export const verifyAdminOtpAPI = async (username, otp) => {
+  const response = await axiosInstance.post("/admin/verify-otp", {
+    username,
+    otp,
+  });
+  return response.data;
+};
+ 
+// Resend OTP if user didn't receive it / it expired
+export const resendAdminOtpAPI = async (username) => {
+  const response = await axiosInstance.post("/admin/resend-otp", {
+    username,
+  });
+  return response.data;
+};
 
 // ==================== FORGOT / RESET PASSWORD ====================
 
