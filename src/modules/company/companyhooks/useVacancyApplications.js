@@ -172,33 +172,71 @@ export const useVacancyApplications = (vacancyId) => {
       });
     }
   };
+  // const onboardWorker = async (workerId) => {
+  //   setActionLoading(workerId, "join", true);
+  //   try {
+  //     await onboardingAPI({
+  //       worker_id: workerId,
+  //       vacancy_id: vacancyId,
+  //     });
+  //     Swal.fire({
+  //       icon: "success",
+  //       title: "Worker Onboarded",
+  //       text: "Worker has been successfully onboarded.",
+  //       timer: 2000,
+  //       showConfirmButton: false,
+  //     });
+  //     await fetchApplications(); // refresh to get updated on_boarding_status
+  //     return true;
+  //   } catch (error) {
+  //     Swal.fire({
+  //       icon: "error",
+  //       title: "Onboarding Failed",
+  //       text: error?.response?.data?.message || "Failed to onboard worker.",
+  //     });
+  //     return false;
+  //   } finally {
+  //     setActionLoading(workerId, "join", false);
+  //   }
+  // };
   const onboardWorker = async (workerId) => {
-    setActionLoading(workerId, "join", true);
-    try {
-      await onboardingAPI({
-        worker_id: workerId,
-        vacancy_id: vacancyId,
-      });
+  setActionLoading(workerId, "join", true);
+  try {
+    const response = await onboardingAPI({
+      worker_id: workerId,
+      vacancy_id: vacancyId,
+    });
+
+    // 🔽 Check body status, same pattern as terminateWorker
+    if (response?.data?.status === 500) {
       Swal.fire({
-        icon: "success",
-        title: "Worker Onboarded",
-        text: "Worker has been successfully onboarded.",
-        timer: 2000,
-        showConfirmButton: false,
-      });
-      await fetchApplications(); // refresh to get updated on_boarding_status
-      return true;
-    } catch (error) {
-      Swal.fire({
-        icon: "error",
+        icon: "warning",
         title: "Onboarding Failed",
-        text: error?.response?.data?.message || "Failed to onboard worker.",
+        text: response.data.message,
       });
       return false;
-    } finally {
-      setActionLoading(workerId, "join", false);
     }
-  };
+
+    Swal.fire({
+      icon: "success",
+      title: "Worker Onboarded",
+      text: "Worker has been successfully onboarded.",
+      timer: 2000,
+      showConfirmButton: false,
+    });
+    await fetchApplications(); // refresh to get updated on_boarding_status
+    return true;
+  } catch (error) {
+    Swal.fire({
+      icon: "error",
+      title: "Onboarding Failed",
+      text: error?.response?.data?.message || "Failed to onboard worker.",
+    });
+    return false;
+  } finally {
+    setActionLoading(workerId, "join", false);
+  }
+};
 
   const terminateWorker = async (workerId) => {
     setActionLoading(workerId, "left", true);

@@ -808,8 +808,9 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
 
   const [currentStep, setCurrentStep] = useState(1);
 
-  // FIX: UI only has 4 steps (Review -> Owner -> Address -> Tax+Terms)
-  const totalSteps = 4;
+  // FIX: Owner Details step removed, and Working Address fields merged into
+  // step 1 per client request. Wizard is now 2 steps (Company + Address -> Tax).
+  const totalSteps = 2;
 
   const [formData, setFormData] = useState({
     company_name: "",
@@ -1005,17 +1006,17 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
       updateFormData({ industry_id: company.industry_id });
     }
 
-    // FIX: step detection now matches the 4-step UI
-    // Step 1: company basics -> Step 2: owner -> Step 3: address -> Step 4: tax+terms
+    // FIX: step detection now matches the 2-step UI
+    // (Owner Details step removed, Working Address merged into step 1)
+    // Step 1: company basics + address -> Step 2: tax+terms
     let step = 1;
-    if (mappedData.company_name && mappedData.email && mappedData.company_phone) {
+    if (
+      mappedData.company_name &&
+      mappedData.email &&
+      mappedData.company_phone &&
+      mappedData.addresses.length > 0
+    ) {
       step = 2;
-    }
-    if (mappedData.owner_name && mappedData.owner_email && mappedData.owner_phone) {
-      step = 3;
-    }
-    if (mappedData.addresses.length > 0) {
-      step = 4;
     }
     if (company.profile_status === "completed") {
       setProfileCompleted(true);
@@ -1025,6 +1026,8 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
   };
 
   // ---------- Validation ----------
+  // FIX: Step 1 now covers both company basics AND working address
+  // (Working Address step removed and merged in per client request)
   const validateStep1 = () => {
     const errs = {};
     if (!formData.company_name?.trim())
@@ -1038,36 +1041,9 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     else if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits))
       errs.company_phone = "Must be 10 digits starting with 6-9";
     if (!formData.industry_id) errs.industry_id = "Please select an industry";
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
 
-  const validateStep2 = () => {
-    const errs = {};
-    if (!formData.owner_name?.trim())
-      errs.owner_name = "Owner name is required";
-    if (!formData.owner_email?.trim())
-      errs.owner_email = "Owner email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.owner_email))
-      errs.owner_email = "Email is invalid";
-    const phoneDigits = formData.owner_phone?.replace(/\D/g, "");
-    if (!formData.owner_phone) errs.owner_phone = "Owner phone is required";
-    else if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits))
-      errs.owner_phone = "Must be 10 digits starting with 6-9";
-    if (!formData.owner_role) errs.owner_role = "Please select a role";
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-  const tanRegex = /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/;
-  const cinRegex = /^[A-Z]{1}[0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
-
-  // FIX: Step 3 is now the WORKING ADDRESS step (was tax details)
-  const validateStep3 = () => {
-    const errs = {};
     if (!formData.addresses || formData.addresses.length === 0) {
-      errs.addresses = "At least one address is required";
+      errs.addresses = "Working address is required";
     } else {
       formData.addresses.forEach((addr, idx) => {
         if (!addr.address?.trim())
@@ -1081,12 +1057,17 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
           errs[`address_${idx}_zip`] = "PIN code must be 6 digits";
       });
     }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  // FIX: Step 4 is now TAX DETAILS + TERMS + PRIVACY (final step, was split into 4/5)
-  const validateStep4 = () => {
+  const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+  const tanRegex = /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/;
+  const cinRegex = /^[A-Z]{1}[0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
+
+  // FIX: Step 2 is now TAX DETAILS + TERMS + PRIVACY (final step)
+  const validateStep2 = () => {
     const errs = {};
 
     const tan = formData.pan_number?.trim();
@@ -1120,15 +1101,13 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
         return validateStep1();
       case 2:
         return validateStep2();
-      case 3:
-        return validateStep3();
-      case 4:
-        return validateStep4();
       default:
         return true;
     }
   };
 
+  // FIX: submitStep1 now also saves the working address, since Working
+  // Address is no longer a separate step.
   const submitStep1 = async () => {
     if (!validateStep1()) return false;
 
@@ -1141,6 +1120,13 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
         email: formData.email,
         company_phone: formData.company_phone.replace(/\D/g, ""),
         industry_id: formData.industry_id,
+        addresses: formData.addresses.map((addr) => ({
+          address: addr.address,
+          city_id: parseInt(addr.city_id),
+          state_id: parseInt(addr.state_id),
+          zip: addr.zip,
+          ...(addr.id ? { id: addr.id } : {}),
+        })),
       };
 
       if (Cookies.get("token")) {
@@ -1267,36 +1253,11 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
       let payload = {};
 
       // =========================
-      // STEP 2 - Owner details
+      // STEP 2 - Tax details + Terms + Privacy (final step)
+      // (Owner Details and Working Address steps removed; Working Address
+      // is now saved as part of step 1 in submitStep1)
       // =========================
       if (currentStep === 2) {
-        payload = {
-          owner_name: formData.owner_name,
-          owner_email: formData.owner_email,
-          owner_phone: formData.owner_phone.replace(/\D/g, ""),
-          owner_role: formData.owner_role,
-        };
-      }
-
-      // =========================
-      // STEP 3 - Working address (FIXED: was tax details before)
-      // =========================
-      else if (currentStep === 3) {
-        payload = {
-          addresses: formData.addresses.map((addr) => ({
-            address: addr.address,
-            city_id: parseInt(addr.city_id),
-            state_id: parseInt(addr.state_id),
-            zip: addr.zip,
-            ...(addr.id ? { id: addr.id } : {}),
-          })),
-        };
-      }
-
-      // =========================
-      // STEP 4 - Tax details + Terms + Privacy (FIXED: merged, final step)
-      // =========================
-      else if (currentStep === 4) {
         payload = {
           pan_number: formData.pan_number || "",
           tin_number: formData.tin_number || "",
@@ -1364,7 +1325,7 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
           Cookies.set("company", JSON.stringify(updatedCompany), cookieOptions);
         }
 
-        // FIX: completion check now fires on the real last step (4),
+        // FIX: completion check now fires on the real last step (2),
         // and falls back to a 200/201 status if the backend doesn't
         // send profile_status explicitly on the final step.
         const isLastStep = currentStep === totalSteps;
