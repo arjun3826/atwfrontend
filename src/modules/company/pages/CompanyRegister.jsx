@@ -3795,8 +3795,8 @@ const CompanyRegister = () => {
                 <input
                   type="text"
                   maxLength={10}
-                  value={formData.pan_number}
-                  onChange={(e) => handleChange("pan_number", e.target.value)}
+                  value={formData.tan_number}
+                  onChange={(e) => handleChange("tan_number", e.target.value)}
                   disabled={loading}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400"
                 />
