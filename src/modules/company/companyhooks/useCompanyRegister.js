@@ -823,6 +823,7 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     owner_role: "",
     gst_number: "",
     pan_number: "",
+    tan_number: "",
     tin_number: "",
     agent_code: "",
     addresses: [],
@@ -985,6 +986,7 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
       owner_role: company.owner_role || "",
       gst_number: company.gst_number || "",
       pan_number: company.pan_number || "",
+      tan_number: company.tan_number || "",
       tin_number: company.tin_number || "",
 
       addresses: (company.addresses || []).map((addr) => ({
@@ -1070,12 +1072,12 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
   const validateStep2 = () => {
     const errs = {};
 
-    const tan = formData.pan_number?.trim();
+    const tan = formData.tan_number?.trim(); 
     const cin = formData.tin_number?.trim();
 
-    // TAN (pan_number) - optional
+    // TAN (tan_number) - optional
     if (tan && !tanRegex.test(tan)) {
-      errs.pan_number = "Invalid TAN format (ABCD12345E)";
+      errs.tan_number = "Invalid TAN format (ABCD12345E)";
     }
 
     // CIN (tin_number) - optional
@@ -1259,7 +1261,7 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
       // =========================
       if (currentStep === 2) {
         payload = {
-          pan_number: formData.pan_number || "",
+          tan_number: formData.tan_number || "",
           tin_number: formData.tin_number || "",
           agent_code: formData.agent_code || null,
           t_and_c_accepted: formData.accepted_terms ? 1 : 0,
