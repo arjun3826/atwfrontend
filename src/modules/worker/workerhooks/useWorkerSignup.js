@@ -47,6 +47,7 @@ export const useWorkerSignup = ({ onSuccess } = {}) => {
     skills: [],
 
     date_of_birth: "",
+    gender: "",
     father_name: "",
     aadhar_number: "",
 
@@ -277,6 +278,7 @@ useEffect(() => {
       designation_id: user.designation_id || "",
       skills: Array.isArray(user.skills) ? user.skills : [],
       date_of_birth: user.date_of_birth || "",
+      gender: user.gender || "",
       father_name: user.father_name || "",
       aadhar_number: user.aadhaar_number || "",
 
@@ -320,6 +322,7 @@ useEffect(() => {
     if (mappedData.industry_id && mappedData.designation_id) step = 3;
     if (
       mappedData.date_of_birth &&
+      mappedData.gender &&
       mappedData.father_name &&
       mappedData.aadhar_number
     )
@@ -397,6 +400,7 @@ useEffect(() => {
             first_name: names[0] || "",
             last_name: names.slice(1).join(" "),
             date_of_birth: normalizeDobToISO(aadhaar?.dob),
+            gender: aadhaar?.gender || "",
             father_name: aadhaar?.father_name || "",
             permanent_address_line: aadhaar?.address || "",
             aadhar_number: aadharDigits,

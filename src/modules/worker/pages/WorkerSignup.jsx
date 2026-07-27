@@ -1163,7 +1163,7 @@ useEffect(() => {
   // ---- Aadhaar gate local UI state (stub flow, see banner above) ----
   const hasToken = !!Cookies.get("token");
   const [aadhaarGateStage, setAadhaarGateStage] = useState(
-    hasToken ? "done" : "number", // "number" | "otp" | "done" | "skipped"
+    hasToken ? "done" : "number", // "number" | "otp" | "done" | "skipped"| "underage"
   );
   const [aadhaarNumberInput, setAadhaarNumberInput] = useState("");
   const [aadhaarOtpDigits, setAadhaarOtpDigits] = useState(Array(OTP_LENGTH).fill(""));
@@ -1326,6 +1326,15 @@ useEffect(() => {
     );
     setAadhaarBusy(false);
     if (res.success) {
+
+      // 👇 NEW: age gate — block registration if Aadhaar DOB shows under 18
+    const dob = res.data?.date_of_birth || formData.date_of_birth;
+    const age = calculateAge(dob);
+
+    if (age !== null && age < 18) {
+      setAadhaarGateStage("underage");
+      return; // stop here, do not proceed to success toast / "done"
+    }
       setShowAadhaarSuccessToast(true);
       setTimeout(() => {
         setShowAadhaarSuccessToast(false);
@@ -1335,6 +1344,19 @@ useEffect(() => {
       setAadhaarError("Invalid OTP, please try again");
     }
   };
+
+  const calculateAge = (dobString) => {
+  if (!dobString) return null;
+  const dob = new Date(dobString);
+  if (isNaN(dob.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+};
 
   const skipAadhaarGate = () => setAadhaarGateStage("skipped");
 
@@ -1751,6 +1773,82 @@ useEffect(() => {
       </div>
     );
   }
+
+  if (aadhaarGateStage === "underage") {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="w-full max-w-md">
+        <div className="flex justify-center mb-6">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="max-h-14" />
+          ) : (
+            <img src="/images/logo.png" alt="Default Logo" className="max-h-14" />
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle size={26} className="text-red-600" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-800">Registration Not Allowed</h1>
+          <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+            Based on the date of birth linked to your Aadhaar, you are under 18 years of age.
+            <br />
+            You must be at least 18 years old to register as a worker on Anytime Work.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAadhaarGateStage("number");
+              setAadhaarNumberInput("");
+              setAadhaarOtpDigits(Array(OTP_LENGTH).fill(""));
+              setAadhaarError("");
+            }}
+            className="mt-6 w-full py-3 px-4 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition"
+          >
+            Go Back
+          </button>
+
+          {(whatsappNumber || phoneNumber) && (
+            <div className="pt-4 mt-4 border-t border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 mb-3">Help &amp; Support</p>
+              <div className="flex items-center justify-center gap-3">
+                {whatsappNumber && (
+  <a
+    href={`https://wa.me/${whatsappNumber.replace(/\D/g, "")}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition-colors text-sm font-medium"
+  >
+    <img
+      src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg"
+      alt="WhatsApp"
+      className="w-4 h-4"
+    />
+    WhatsApp Help
+  </a>
+)}
+
+{phoneNumber && (
+  <a
+    href={`tel:${phoneNumber}`}
+    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors text-sm font-medium"
+  >
+    <Phone size={16} />
+    Call Support
+  </a>
+)}
+                
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+  
   // ============================ END AADHAAR GATE ============================
 
   const aadhaarLocked = aadhaarGateStage === "done";
@@ -1786,6 +1884,7 @@ useEffect(() => {
                 />
                 <ReadonlyField icon={<User size={16} />} label="Father's Name" value={formData.father_name} />
                 <ReadonlyField icon={<Calendar size={16} />} label="Date of Birth" value={formData.date_of_birth} />
+                <ReadonlyField icon={<User size={16} />} label="Gender" value={formData.gender} verified />
               </div>
             </div>
           );
