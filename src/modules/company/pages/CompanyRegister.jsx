@@ -4284,8 +4284,6 @@ const CompanyRegister = () => {
     loading,
     states,
     token,
-    citiesMap,
-    citiesLoading,
     handleChange,
     industries,
     handleIndustryChange,
@@ -4295,7 +4293,6 @@ const CompanyRegister = () => {
     nextStep,
     prevStep,
     goToStep,
-    fetchCities,
     // Hits your real GST-lookup endpoint (see verifyGstNumber in useCompanyRegister.js).
     // Returns { success, data: { company_name, trade_name, gst_number, pan_number,
     // gst_status, business_nature, constitution, taxpayer_type, registered_on,
@@ -4321,7 +4318,6 @@ const CompanyRegister = () => {
   const [gstStage, setGstStage] = useState(hasToken ? "done" : "input"); // "input" | "verifying" | "done"
   const [gstInput, setGstInput] = useState("");
   const [gstError, setGstError] = useState("");
-  const [gstBusy, setGstBusy] = useState(false);
   const [showGstSuccessToast, setShowGstSuccessToast] = useState(false);
   const privacyContentRef = useRef(null);
 
@@ -4350,13 +4346,11 @@ const CompanyRegister = () => {
   };
 
   // ======================= WIZARD CONFIG =======================
-  // 3 steps: Company Details (GST-verified info), Working Address, Tax Details
-  const stepTitles = ["Company Details", "Working Address", "Tax Details"];
-  const stepIcons = [
-    <Building size={18} />,
-    <MapPin size={18} />,
-    <CreditCard size={18} />,
-  ];
+  // 2 steps: Company Details (GST-verified info) + Tax Details
+  // (Working Address step removed per client request; Industry/Phone/Email
+  // moved into the Tax Details step along with an optional extra address)
+  const stepTitles = ["Company Details", "Tax Details"];
+  const stepIcons = [<Building size={18} />, <CreditCard size={18} />];
 
   // ---- Terms modal state ----
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -4412,7 +4406,7 @@ const CompanyRegister = () => {
     handleChange("accepted_privacy", checked);
   };
 
-  // ---- Working address: single address, entered manually (no geolocation) ----
+  // ---- Optional additional business address (Address / PIN Code / State only) ----
   useEffect(() => {
     if (!formData.addresses || formData.addresses.length === 0) {
       handleChange("addresses", [{ address: "", state_id: "", city_id: "", zip: "" }]);
@@ -4461,220 +4455,120 @@ const CompanyRegister = () => {
   // ======================= STEP CONTENT =======================
   const renderStepContent = () => {
     switch (currentStep) {
-      // Step 1: GST-verified company details, plus phone/email/industry which
-      // the GST lookup does not provide and the user must supply.
+      // Step 1: GST-verified company details only (read-only).
       case 1:
-        return (
-          <div className="space-y-8">
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-gray-800">Company Details</h2>
-                <p className="text-gray-500 text-sm mt-1">
-                  These details were retrieved from your GST number.
-                  <br />
-                  Please add your phone number, email, and industry to continue.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ReadonlyField icon={<Building size={16} />} label="Business Name" value={formData.company_name} />
-                <ReadonlyField icon={<Building size={16} />} label="Trade Name" value={formData.trade_name} />
-                <ReadonlyField icon={<FileText size={16} />} label="GSTIN" value={maskedGst} verified />
-                <ReadonlyField icon={<FileText size={16} />} label="PAN Number" value={formData.pan_number} />
-                <ReadonlyField icon={<CheckCircle size={16} />} label="GST Status" value={formData.gst_status} />
-                <ReadonlyField icon={<Building size={16} />} label="Business Nature" value={formData.business_nature} />
-                <ReadonlyField icon={<Building size={16} />} label="Constitution" value={formData.constitution} />
-                <ReadonlyField icon={<FileText size={16} />} label="Taxpayer Type" value={formData.taxpayer_type} />
-                <ReadonlyField icon={<FileText size={16} />} label="Registration Date" value={formData.registered_on} />
-                <ReadonlyField icon={<MapPin size={16} />} label="Business Address" value={formData.business_address} wide />
-              </div>
-            </div>
-
-            <div className="space-y-6 pt-6 border-t border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Phone Number <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      maxLength={10}
-                      value={formData.company_phone}
-                      onChange={(e) => handleChange("company_phone", e.target.value.replace(/\D/g, ""))}
-                      disabled={loading}
-                      placeholder="10-digit phone number"
-                      className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.company_phone ? "border-red-500" : "border-gray-300"
-                        }`}
-                    />
-                  </div>
-                  {errors.company_phone && (
-                    <p className="text-red-500 text-sm flex items-center mt-1">
-                      <AlertCircle size={14} className="mr-1" /> {errors.company_phone}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Email Address <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleChange("email", e.target.value)}
-                      disabled={loading}
-                      placeholder="Enter company email"
-                      className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.email ? "border-red-500" : "border-gray-300"
-                        }`}
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="text-red-500 text-sm flex items-center mt-1">
-                      <AlertCircle size={14} className="mr-1" /> {errors.email}
-                    </p>
-                  )}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-1">
-                    Industry <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={selectedIndustryId}
-                    onChange={(e) => handleIndustryChange(e.target.value)}
-                    disabled={loading || industriesLoading}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.industry_id ? "border-red-500" : "border-gray-300"
-                      }`}
-                  >
-                    <option value="">Select Industry</option>
-                    {industries.map((ind) => (
-                      <option key={ind.id} value={ind.id}>
-                        {ind.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.industry_id && (
-                    <p className="text-red-500 text-sm flex items-center mt-1">
-                      <AlertCircle size={14} className="mr-1" /> {errors.industry_id}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      // Step 2: Company's working address, entered manually
-      case 2:
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-xl font-bold text-gray-800">Company's Working Address</h2>
+              <h2 className="text-xl font-bold text-gray-800">Company Details</h2>
               <p className="text-gray-500 text-sm mt-1">
-                This is the working address that is used during vacancy creation
+                These details were retrieved from your GST number.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Street Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={primaryAddress.address}
-                  onChange={(e) => updatePrimaryAddress("address", e.target.value)}
-                  disabled={loading}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_address ? "border-red-500" : "border-gray-300"}`}
-                />
-                {errors.address_0_address && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_address}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  PIN Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={primaryAddress.zip}
-                  onChange={(e) => updatePrimaryAddress("zip", e.target.value.replace(/\D/g, ""))}
-                  disabled={loading}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_zip ? "border-red-500" : "border-gray-300"}`}
-                />
-                {errors.address_0_zip && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_zip}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  State <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={primaryAddress.state_id}
-                  onChange={(e) => {
-                    updatePrimaryAddress("state_id", e.target.value);
-                    fetchCities(e.target.value);
-                  }}
-                  disabled={loading}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_state_id ? "border-red-500" : "border-gray-300"}`}
-                >
-                  <option value="">Select State</option>
-                  {states.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.address_0_state_id && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_state_id}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  District <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={primaryAddress.city_id}
-                  onChange={(e) => updatePrimaryAddress("city_id", e.target.value)}
-                  disabled={loading || !primaryAddress.state_id || citiesLoading[primaryAddress.state_id]}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_city_id ? "border-red-500" : "border-gray-300"}`}
-                >
-                  <option value="">Select District</option>
-                  {citiesMap[primaryAddress.state_id]?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.address_0_city_id && (
-                  <p className="text-red-500 text-sm mt-1">
-                    <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_city_id}
-                  </p>
-                )}
-              </div>
+              <ReadonlyField icon={<Building size={16} />} label="Business Name" value={formData.company_name} />
+              <ReadonlyField icon={<Building size={16} />} label="Trade Name" value={formData.trade_name} />
+              <ReadonlyField icon={<FileText size={16} />} label="GSTIN" value={maskedGst} verified />
+              <ReadonlyField icon={<FileText size={16} />} label="PAN Number" value={formData.pan_number} />
+              <ReadonlyField icon={<CheckCircle size={16} />} label="GST Status" value={formData.gst_status} />
+              <ReadonlyField icon={<Building size={16} />} label="Business Nature" value={formData.business_nature} />
+              <ReadonlyField icon={<Building size={16} />} label="Constitution" value={formData.constitution} />
+              <ReadonlyField icon={<FileText size={16} />} label="Taxpayer Type" value={formData.taxpayer_type} />
+              <ReadonlyField icon={<FileText size={16} />} label="Registration Date" value={formData.registered_on} />
+              <ReadonlyField icon={<MapPin size={16} />} label="Business Address" value={formData.business_address} wide />
             </div>
           </div>
         );
 
-      // Step 3: KYC / Tax Details (final step)
-      case 3:
+      // Step 2: Industry / Phone / Email (moved here) + Tax Details +
+      // optional additional address + Terms & Privacy.
+      case 2:
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="text-center">
-              <h2 className="text-xl font-bold text-gray-800">KYC / Tax Details</h2>
-              <p className="text-gray-500 text-sm mt-1">Provide optional tax identifiers and a referral code, if you have one</p>
+              <h2 className="text-xl font-bold text-gray-800">Tax Details</h2>
+              <p className="text-gray-500 text-sm mt-1">
+                Add your contact info, tax identifiers, and accept our policies to finish.
+              </p>
             </div>
+
+            {/* Industry / Phone / Email */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Industry <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedIndustryId}
+                  onChange={(e) => handleIndustryChange(e.target.value)}
+                  disabled={loading || industriesLoading}
+                  className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.industry_id ? "border-red-500" : "border-gray-300"
+                    }`}
+                >
+                  <option value="">Select Industry</option>
+                  {industries.map((ind) => (
+                    <option key={ind.id} value={ind.id}>
+                      {ind.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.industry_id && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <AlertCircle size={14} className="mr-1" /> {errors.industry_id}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={formData.company_phone}
+                    onChange={(e) => handleChange("company_phone", e.target.value.replace(/\D/g, ""))}
+                    disabled={loading}
+                    placeholder="10-digit phone number"
+                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.company_phone ? "border-red-500" : "border-gray-300"
+                      }`}
+                  />
+                </div>
+                {errors.company_phone && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <AlertCircle size={14} className="mr-1" /> {errors.company_phone}
+                  </p>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleChange("email", e.target.value)}
+                    disabled={loading}
+                    placeholder="Enter company email"
+                    className={`w-full pl-10 pr-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.email ? "border-red-500" : "border-gray-300"
+                      }`}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-red-500 text-sm flex items-center mt-1">
+                    <AlertCircle size={14} className="mr-1" /> {errors.email}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Tax identifiers + Referral */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-gray-200">
               <div>
                 <label className="block text-sm font-medium mb-1">TAN Number (Optional)</label>
                 <input
@@ -4685,6 +4579,11 @@ const CompanyRegister = () => {
                   disabled={loading}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400"
                 />
+                {errors.tan_number && (
+                  <p className="text-red-500 text-sm mt-1">
+                    <AlertCircle size={14} className="inline mr-1" /> {errors.tan_number}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">CIN Number (Optional)</label>
@@ -4696,8 +4595,13 @@ const CompanyRegister = () => {
                   disabled={loading}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400"
                 />
+                {errors.tin_number && (
+                  <p className="text-red-500 text-sm mt-1">
+                    <AlertCircle size={14} className="inline mr-1" /> {errors.tin_number}
+                  </p>
+                )}
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-1">Referral Code (Optional)</label>
                 <input
                   type="text"
@@ -4709,37 +4613,88 @@ const CompanyRegister = () => {
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400"
                 />
               </div>
-              <div className="space-y-3 flex flex-col justify-center">
-                <div className="flex items-start gap-3 cursor-pointer" onClick={openModal}>
-                  <input type="checkbox" checked={formData.accepted_terms} readOnly className="mt-1 w-5 h-5 text-blue-600 rounded" />
-                  <label className="text-sm text-gray-800">
-                    I agree to the{" "}
-                    <button type="button" onClick={openModal} className="text-blue-600 hover:underline font-semibold">
-                      Terms &amp; Conditions
-                    </button>
-                  </label>
+            </div>
+
+            {/* Optional additional business address */}
+            <div className="pt-6 border-t border-gray-200 space-y-4">
+              <p className="text-sm font-semibold text-gray-700">Additional Business Address (Optional)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium mb-1">Address (Optional)</label>
+                  <input
+                    type="text"
+                    value={primaryAddress.address}
+                    onChange={(e) => updatePrimaryAddress("address", e.target.value)}
+                    disabled={loading}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400"
+                  />
                 </div>
-                <div className="flex items-start gap-3 cursor-pointer" onClick={openPrivacyModal}>
-                  <input type="checkbox" checked={formData.accepted_privacy} readOnly className="mt-1 w-5 h-5 text-blue-600 rounded" />
-                  <label className="text-sm text-gray-800">
-                    I agree to the{" "}
-                    <button type="button" onClick={openPrivacyModal} className="text-blue-600 hover:underline font-semibold">
-                      Privacy Policy
-                    </button>
-                  </label>
+                <div>
+                  <label className="block text-sm font-medium mb-1">PIN Code (Optional)</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={primaryAddress.zip}
+                    onChange={(e) => updatePrimaryAddress("zip", e.target.value.replace(/\D/g, ""))}
+                    disabled={loading}
+                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 ${errors.address_0_zip ? "border-red-500" : "border-gray-300"}`}
+                  />
+                  {errors.address_0_zip && (
+                    <p className="text-red-500 text-sm mt-1">
+                      <AlertCircle size={14} className="inline mr-1" /> {errors.address_0_zip}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">State (Optional)</label>
+                  <select
+                    value={primaryAddress.state_id}
+                    onChange={(e) => updatePrimaryAddress("state_id", e.target.value)}
+                    disabled={loading}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="">Select State</option>
+                    {states.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
-            {errors.accepted_terms && (
-              <p className="text-red-500 text-sm flex items-center">
-                <AlertCircle size={14} className="mr-1" /> {errors.accepted_terms}
-              </p>
-            )}
-            {errors.accepted_privacy && (
-              <p className="text-red-500 text-sm flex items-center">
-                <AlertCircle size={14} className="mr-1" /> {errors.accepted_privacy}
-              </p>
-            )}
+
+            {/* Terms & Privacy */}
+            <div className="pt-6 border-t border-gray-200 space-y-3">
+              <div className="flex items-start gap-3 cursor-pointer" onClick={openModal}>
+                <input type="checkbox" checked={formData.accepted_terms} readOnly className="mt-1 w-5 h-5 text-blue-600 rounded" />
+                <label className="text-sm text-gray-800">
+                  I agree to the{" "}
+                  <button type="button" onClick={openModal} className="text-blue-600 hover:underline font-semibold">
+                    Terms &amp; Conditions
+                  </button>
+                </label>
+              </div>
+              <div className="flex items-start gap-3 cursor-pointer" onClick={openPrivacyModal}>
+                <input type="checkbox" checked={formData.accepted_privacy} readOnly className="mt-1 w-5 h-5 text-blue-600 rounded" />
+                <label className="text-sm text-gray-800">
+                  I agree to the{" "}
+                  <button type="button" onClick={openPrivacyModal} className="text-blue-600 hover:underline font-semibold">
+                    Privacy Policy
+                  </button>
+                </label>
+              </div>
+              {errors.accepted_terms && (
+                <p className="text-red-500 text-sm flex items-center">
+                  <AlertCircle size={14} className="mr-1" /> {errors.accepted_terms}
+                </p>
+              )}
+              {errors.accepted_privacy && (
+                <p className="text-red-500 text-sm flex items-center">
+                  <AlertCircle size={14} className="mr-1" /> {errors.accepted_privacy}
+                </p>
+              )}
+            </div>
           </div>
         );
 
