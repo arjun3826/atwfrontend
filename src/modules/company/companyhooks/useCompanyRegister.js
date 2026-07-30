@@ -1507,8 +1507,10 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
 
   const [currentStep, setCurrentStep] = useState(1);
 
-  // 3 steps: 1) Company Details (GST-verified info), 2) Working Address, 3) Tax Details + Terms
-  const totalSteps = 3;
+  // 2 steps now: 1) Company Details (GST-verified, read-only)
+  //              2) Industry/Phone/Email + Tax Details + optional address + Terms
+  // (the old "Working Address" step has been removed per client request)
+  const totalSteps = 2;
 
   const [formData, setFormData] = useState({
     company_name: "",
@@ -1534,6 +1536,8 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     tan_number: "",
     tin_number: "",
     agent_code: "",
+    // Optional additional business address (Address / PIN Code / State only —
+    // no District/City selection anymore since the client didn't ask for it).
     addresses: [],
     accepted_terms: false,
     accepted_privacy: false,
@@ -1580,7 +1584,8 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     clearFieldError(field);
   };
 
-  // Address management
+  // Address management (kept for API-shape compatibility, but address is
+  // now fully optional and has no city/district field in the UI)
   const addAddress = () => {
     const newAddress = { address: "", city_id: "", state_id: "", zip: "" };
     setFormData((prev) => ({
@@ -1665,6 +1670,8 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     }
   };
 
+  // Kept in case a future step needs district/city again — not called
+  // from the UI right now since the District field was removed.
   const fetchCities = async (stateId) => {
     if (!stateId || citiesMap[stateId]) return citiesMap[stateId] || [];
     setCitiesLoading((prev) => ({ ...prev, [stateId]: true }));
@@ -1735,19 +1742,11 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
       updateFormData({ industry_id: company.industry_id });
     }
 
-    // Step detection for the 3-step flow:
-    // Step 1: company basics -> Step 2: working address -> Step 3: tax + terms
+    // Step detection for the 2-step flow:
+    // Step 1: GST-verified basics -> Step 2: industry/phone/email + tax + terms
     let step = 1;
-    if (
-      mappedData.company_name &&
-      mappedData.email &&
-      mappedData.company_phone &&
-      mappedData.gst_number
-    ) {
+    if (mappedData.company_name && mappedData.gst_number) {
       step = 2;
-    }
-    if (step === 2 && mappedData.addresses.length > 0) {
-      step = 3;
     }
     if (company.profile_status === "completed") {
       setProfileCompleted(true);
@@ -1757,44 +1756,14 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
   };
 
   // ---------- Validation ----------
-  // Step 1: Company basics only (address now lives in its own step)
+  // Step 1: nothing new to collect here — it's just the GST-verified,
+  // read-only info. We still sanity-check the core GST fields exist.
   const validateStep1 = () => {
     const errs = {};
     if (!formData.company_name?.trim())
       errs.company_name = "Company name is required";
-    if (!formData.gst_number?.trim()) errs.gst_number = "GST number is required";
-    if (!formData.email?.trim()) errs.email = "Company email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email))
-      errs.email = "Email is invalid";
-    const phoneDigits = formData.company_phone?.replace(/\D/g, "");
-    if (!formData.company_phone) errs.company_phone = "Phone is required";
-    else if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits))
-      errs.company_phone = "Must be 10 digits starting with 6-9";
-    if (!formData.industry_id) errs.industry_id = "Please select an industry";
-
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  // Step 2: Working Address
-  const validateStep2 = () => {
-    const errs = {};
-
-    if (!formData.addresses || formData.addresses.length === 0) {
-      errs.addresses = "Working address is required";
-    } else {
-      formData.addresses.forEach((addr, idx) => {
-        if (!addr.address?.trim())
-          errs[`address_${idx}_address`] = "Address is required";
-        if (!addr.state_id)
-          errs[`address_${idx}_state_id`] = "State is required";
-        if (!addr.city_id) errs[`address_${idx}_city_id`] = "District is required";
-        const zip = addr.zip?.trim();
-        if (!zip) errs[`address_${idx}_zip`] = "PIN code is required";
-        else if (!/^\d{6}$/.test(zip))
-          errs[`address_${idx}_zip`] = "PIN code must be 6 digits";
-      });
-    }
+    if (!formData.gst_number?.trim())
+      errs.gst_number = "GST number is required";
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -1804,9 +1773,21 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
   const tanRegex = /^[A-Z]{4}[0-9]{5}[A-Z]{1}$/;
   const cinRegex = /^[A-Z]{1}[0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
 
-  // Step 3: Tax Details + Terms + Privacy (final step)
-  const validateStep3 = () => {
+  // Step 2 (final step): Industry, Phone, Email + Tax details + optional
+  // address + Terms/Privacy.
+  const validateStep2 = () => {
     const errs = {};
+
+    if (!formData.industry_id) errs.industry_id = "Please select an industry";
+
+    const phoneDigits = formData.company_phone?.replace(/\D/g, "");
+    if (!formData.company_phone) errs.company_phone = "Phone is required";
+    else if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits))
+      errs.company_phone = "Must be 10 digits starting with 6-9";
+
+    if (!formData.email?.trim()) errs.email = "Company email is required";
+    else if (!/\S+@\S+\.\S+/.test(formData.email))
+      errs.email = "Email is invalid";
 
     const tan = formData.tan_number?.trim();
     const cin = formData.tin_number?.trim();
@@ -1819,6 +1800,14 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
     // CIN (tin_number) - optional
     if (cin && !cinRegex.test(cin)) {
       errs.tin_number = "Invalid CIN format (L12345MH2020PLC123456)";
+    }
+
+    // Additional business address is fully optional. We only validate the
+    // PIN code format *if* the user actually typed something in it.
+    const addr = (formData.addresses && formData.addresses[0]) || {};
+    const zip = addr.zip?.trim();
+    if (zip && !/^\d{6}$/.test(zip)) {
+      errs.address_0_zip = "PIN code must be 6 digits";
     }
 
     if (!formData.accepted_terms) {
@@ -1839,22 +1828,31 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
         return validateStep1();
       case 2:
         return validateStep2();
-      case 3:
-        return validateStep3();
       default:
         return true;
     }
   };
 
-  // Step 1: register/update the company's basic + GST-verified details
-  // (no addresses here anymore — that's Step 2 now)
-  const submitStep1 = async () => {
+  // Step 1: nothing to save to the server yet (it's just GST info already
+  // verified) — just move on to Step 2.
+  const goNextFromStep1 = () => {
     if (!validateStep1()) return false;
+    return true;
+  };
+
+  // Step 2 (final step): submits everything — GST-verified company info +
+  // industry/phone/email + tax details + optional address + terms — in a
+  // single call, then marks the profile complete.
+  const submitFinalStep = async () => {
+    if (!validateStep2()) return false;
 
     setLoading(true);
 
     try {
-      const payload = {
+      const addr = (formData.addresses && formData.addresses[0]) || {};
+      const hasAddress = !!(addr.address?.trim() || addr.zip?.trim() || addr.state_id);
+
+      const basePayload = {
         company_name: formData.company_name,
         trade_name: formData.trade_name,
         gst_number: formData.gst_number,
@@ -1868,28 +1866,111 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
         email: formData.email,
         company_phone: formData.company_phone.replace(/\D/g, ""),
         industry_id: formData.industry_id,
+        tan_number: formData.tan_number || "",
+        tin_number: formData.tin_number || "",
+        agent_code: formData.agent_code || null,
+        t_and_c_accepted: formData.accepted_terms ? 1 : 0,
+        privacy_policy_accepted: formData.accepted_privacy ? 1 : 0,
+        // Optional additional address — only sent if the user filled it in.
+        addresses: hasAddress
+          ? [
+              {
+                address: addr.address || "",
+                zip: addr.zip || "",
+                state_id: addr.state_id ? parseInt(addr.state_id) : null,
+                ...(addr.id ? { id: addr.id } : {}),
+              },
+            ]
+          : [],
       };
 
-      if (Cookies.get("token")) {
-        const response = await updateCompanyData(payload);
+      const currentToken = Cookies.get("token") || token;
 
-        if (response?.status === 200 || response?.data?.status === 200) {
-          setErrors({});
+      // ---- Update path (already has a token from GST verification/session) ----
+      if (currentToken) {
+        const response = await updateCompanyData(basePayload);
+
+        if (
+          response?.status === 500 ||
+          response?.data?.status === 500
+        ) {
+          const backendData = response?.data || response;
+          const formattedErrors = {};
+
+          if (backendData?.message) {
+            formattedErrors._general = backendData.message;
+          }
+          if (backendData?.errors) {
+            Object.keys(backendData.errors).forEach((key) => {
+              formattedErrors[key] = Array.isArray(backendData.errors[key])
+                ? backendData.errors[key][0]
+                : backendData.errors[key];
+            });
+          }
+
+          setErrors(formattedErrors);
 
           Swal.fire({
+            icon: "error",
+            title: "Submission Failed",
+            html:
+              Object.values(formattedErrors).length > 0
+                ? Object.values(formattedErrors)
+                    .map((msg) => `• ${msg}`)
+                    .join("<br>")
+                : backendData?.message || "Something went wrong",
+          });
+
+          return false;
+        }
+
+        if (
+          response?.status === 200 ||
+          response?.status === 201 ||
+          response?.data?.status === 200
+        ) {
+          const apiData = response?.data || {};
+          setErrors({});
+
+          if (apiData?.company) {
+            const currentCompany = getCompanyFromCookie() || {};
+            const updatedCompany = { ...currentCompany, ...apiData.company };
+            Cookies.set("company", JSON.stringify(updatedCompany), cookieOptions);
+          }
+
+          Cookies.set("profile_status", "completed", cookieOptions);
+
+          if (typeof refreshAuth === "function") {
+            refreshAuth();
+          }
+
+          await Swal.fire({
             icon: "success",
-            title: "Progress Saved",
-            timer: 1000,
+            title: "Registration Complete!",
+            text: "Redirecting to your dashboard...",
+            timer: 1500,
             showConfirmButton: false,
           });
+
+          setProfileCompleted(true);
+
+          if (typeof onSuccess === "function") {
+            onSuccess();
+          }
 
           return true;
         }
 
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Unexpected response from server",
+        });
         return false;
       }
 
-      const response = await registerCompany(payload);
+      // ---- Fresh registration path (no token yet) ----
+      const response = await registerCompany(basePayload);
       const data = response.data || response;
 
       if (response?.status === 500) {
@@ -1923,216 +2004,37 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
 
       Cookies.set("token", authToken, cookieOptions);
       Cookies.set("role", "company", cookieOptions);
+      Cookies.set("profile_status", "completed", cookieOptions);
       setToken(authToken);
 
       if (company) {
         Cookies.set("user", JSON.stringify(company), cookieOptions);
-
-        updateFormData({
-          company_name:
-            company.name || company.company_name || formData.company_name,
-          email: company.email || formData.email,
-          company_phone:
-            company.phone || company.company_phone || formData.company_phone,
-        });
-
-        if (company.industry_id) {
-          setSelectedIndustryId(company.industry_id.toString());
-          updateFormData({ industry_id: company.industry_id });
-        }
       }
 
       setErrors({});
 
-      Swal.fire({
+      if (typeof refreshAuth === "function") {
+        refreshAuth();
+      }
+
+      await Swal.fire({
         icon: "success",
-        title: "Company Created",
-        text: "Please continue with the next steps.",
+        title: "Registration Complete!",
+        text: "Redirecting to your dashboard...",
         timer: 1500,
         showConfirmButton: false,
       });
 
+      setProfileCompleted(true);
+
+      if (typeof onSuccess === "function") {
+        onSuccess();
+      }
+
       return true;
     } catch (error) {
-      console.error("STEP 1 ERROR:", error);
+      console.error("FINAL STEP ERROR:", error);
 
-      Swal.fire({
-        icon: "error",
-        title: "Registration Failed",
-        text:
-          error?.response?.data?.message ||
-          error.message ||
-          "Something went wrong",
-      });
-
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Steps 2 & 3 (Working Address, then Tax Details + Terms)
-  const submitCurrentStep = async () => {
-    // frontend validation
-    if (!validateCurrentStep()) return false;
-
-    const currentToken = Cookies.get("token") || token;
-
-    if (!currentToken) {
-      Swal.fire({
-        icon: "error",
-        title: "Session Expired",
-        text: "Please start over.",
-      });
-
-      navigate("/company/register");
-      return false;
-    }
-
-    setLoading(true);
-
-    try {
-      let payload = {};
-
-      // =========================
-      // STEP 2 - Working Address
-      // =========================
-      if (currentStep === 2) {
-        payload = {
-          addresses: formData.addresses.map((addr) => ({
-            address: addr.address,
-            city_id: parseInt(addr.city_id),
-            state_id: parseInt(addr.state_id),
-            zip: addr.zip,
-            ...(addr.id ? { id: addr.id } : {}),
-          })),
-        };
-      }
-
-      // =========================
-      // STEP 3 - Tax details + Terms + Privacy (final step)
-      // =========================
-      if (currentStep === 3) {
-        payload = {
-          tan_number: formData.tan_number || "",
-          tin_number: formData.tin_number || "",
-          agent_code: formData.agent_code || null,
-          t_and_c_accepted: formData.accepted_terms ? 1 : 0,
-          privacy_policy_accepted: formData.accepted_privacy ? 1 : 0,
-        };
-      }
-
-      // =========================
-      // API CALL
-      // =========================
-      const response = await updateCompanyData(payload);
-
-      if (response?.status === 500 || response?.data?.status === 500) {
-        const backendData = response?.data || response;
-        const formattedErrors = {};
-
-        if (backendData?.message) {
-          formattedErrors._general = backendData.message;
-        }
-
-        if (backendData?.errors) {
-          Object.keys(backendData.errors).forEach((key) => {
-            formattedErrors[key] = Array.isArray(backendData.errors[key])
-              ? backendData.errors[key][0]
-              : backendData.errors[key];
-          });
-        }
-
-        setErrors(formattedErrors);
-
-        Swal.fire({
-          icon: "error",
-          title: `Step ${currentStep} Failed`,
-          html:
-            Object.values(formattedErrors).length > 0
-              ? Object.values(formattedErrors)
-                  .map((msg) => `• ${msg}`)
-                  .join("<br>")
-              : backendData?.message || "Something went wrong",
-        });
-
-        return false;
-      }
-
-      // =========================
-      // SUCCESS RESPONSE
-      // =========================
-      if (
-        response?.status === 200 ||
-        response?.status === 201 ||
-        response?.data?.status === 200
-      ) {
-        const apiData = response?.data || {};
-
-        setErrors({});
-
-        if (apiData?.company) {
-          const currentCompany = getCompanyFromCookie() || {};
-          const updatedCompany = {
-            ...currentCompany,
-            ...apiData.company,
-          };
-          Cookies.set("company", JSON.stringify(updatedCompany), cookieOptions);
-        }
-
-        // Completion check fires on the real last step (3), and falls
-        // back to a 200/201 status if the backend doesn't send
-        // profile_status explicitly on the final step.
-        const isLastStep = currentStep === totalSteps;
-        const backendSaysComplete =
-          apiData?.profile_status === "completed" ||
-          response?.status === 200 ||
-          response?.status === 201;
-
-        if (isLastStep && backendSaysComplete) {
-          Cookies.set("profile_status", "completed", cookieOptions);
-
-          if (typeof refreshAuth === "function") {
-            refreshAuth();
-          }
-
-          await Swal.fire({
-            icon: "success",
-            title: "Registration Complete!",
-            text: "Redirecting to your dashboard...",
-            timer: 1500,
-            showConfirmButton: false,
-          });
-
-          setProfileCompleted(true);
-
-          if (typeof onSuccess === "function") {
-            onSuccess();
-          }
-
-          return true;
-        }
-
-        // step success (not final step)
-        Swal.fire({
-          icon: "success",
-          title: "Progress Saved",
-          text: `Step ${currentStep} completed.`,
-          timer: 1000,
-          showConfirmButton: false,
-        });
-
-        return true;
-      }
-
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Unexpected response from server",
-      });
-
-      return false;
-    } catch (error) {
       const backendData = error?.response?.data || {};
       const formattedErrors = {};
 
@@ -2152,13 +2054,11 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
 
       Swal.fire({
         icon: "error",
-        title: `Step ${currentStep} Failed`,
-        html:
-          Object.values(formattedErrors).length > 0
-            ? Object.values(formattedErrors)
-                .map((msg) => `• ${msg}`)
-                .join("<br>")
-            : backendData?.message || "Something went wrong",
+        title: "Submission Failed",
+        text:
+          backendData?.message ||
+          error?.message ||
+          "Something went wrong",
       });
 
       return false;
@@ -2169,20 +2069,14 @@ export const useCompanyRegister = ({ onSuccess } = {}) => {
 
   const nextStep = async () => {
     if (currentStep === 1) {
-      const success = await submitStep1();
-      if (success) setCurrentStep(2);
-      return;
-    }
-
-    if (currentStep < totalSteps) {
-      const success = await submitCurrentStep();
-      if (success) setCurrentStep((prev) => prev + 1);
+      const ok = goNextFromStep1();
+      if (ok) setCurrentStep(2);
       return;
     }
 
     if (currentStep === totalSteps) {
-      // Final step: submitCurrentStep sets profileCompleted internally
-      await submitCurrentStep();
+      // Final step: submitFinalStep sets profileCompleted internally
+      await submitFinalStep();
     }
   };
 

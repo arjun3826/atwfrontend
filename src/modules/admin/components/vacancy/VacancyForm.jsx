@@ -330,11 +330,17 @@ const VacancyForm = ({ mode = "create", vacancyId = null }) => {
       } else if (response?.data?.errors) {
         const apiErrors = response.data.errors;
         const formattedErrors = {};
+        // Object.keys(apiErrors).forEach((key) => {
+        //   formattedErrors[key] = Array.isArray(apiErrors[key])
+        //     ? apiErrors[key][0]
+        //     : apiErrors[key];
+        // });
         Object.keys(apiErrors).forEach((key) => {
-          formattedErrors[key] = Array.isArray(apiErrors[key])
-            ? apiErrors[key][0]
-            : apiErrors[key];
-        });
+        const mappedKey = key === "skill_ids" ? "skills" : key;
+        formattedErrors[mappedKey] = Array.isArray(apiErrors[key])
+          ? apiErrors[key][0]
+          : apiErrors[key];
+      });
         updateErrors(formattedErrors);
         Swal.fire({
           icon: "error",
