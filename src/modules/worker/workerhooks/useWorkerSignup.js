@@ -264,6 +264,7 @@ useEffect(() => {
     }
   };
 
+   
   // Load worker data from "user" cookie and determine step
   const loadDataFromCookie = () => {
     const user = getUserFromCookie();
@@ -369,6 +370,14 @@ useEffect(() => {
         if (m) return `${m[3]}-${m[2]}-${m[1]}`;
         return "";
       };
+      const normalizeGender = (g) => {
+        if (!g) return "";
+        const val = String(g).trim().toLowerCase();
+        if (val === "m" || val === "male") return "male";
+        if (val === "f" || val === "female") return "female";
+        if (val === "o" || val === "other" || val === "t" || val === "transgender") return "other";
+        return "";
+      };
 
       const verifyAadhaarOtp = async (otp, aadhaarNumber) => {
         const res = await verifyAadhaarOtpAPI(
@@ -400,7 +409,7 @@ useEffect(() => {
             first_name: names[0] || "",
             last_name: names.slice(1).join(" "),
             date_of_birth: normalizeDobToISO(aadhaar?.dob),
-            gender: aadhaar?.gender || "",
+            gender: normalizeGender(aadhaar?.gender),
             father_name: aadhaar?.father_name || "",
             permanent_address_line: aadhaar?.address || "",
             aadhar_number: aadharDigits,
@@ -598,6 +607,15 @@ const validateStep3 = () => {
         mobile_number: formData.mobile_number.replace(/\D/g, ""),
         first_name: formData.first_name,
         last_name: formData.last_name,
+        middle_name: formData.middle_name,
+        date_of_birth: formData.date_of_birth,
+        gender: formData.gender,
+        father_name: formData.father_name,
+        aadhar_number: formData.aadhar_number,
+        address: formData.permanent_address_line,
+        state_id: formData.permanent_state_id,
+        city_id: formData.permanent_city_id,
+        zip: formData.permanent_zip,
         // work_email: formData.work_email,
       };
 

@@ -9,6 +9,7 @@ import {
   MapPin,
   Calendar,
   CheckCircle,
+  Star,
 } from "lucide-react";
 
 const JobDetailsModal = ({ job, onClose, onApply, applied }) => {
@@ -259,6 +260,27 @@ const JobDetailsModal = ({ job, onClose, onApply, applied }) => {
                     label="Experience Required"
                     value={job.experience || "Not specified"}
                   />
+                </Card>
+
+                 {/* ADD THE SKILLS CARD HERE */}
+                <Card
+                  title="Skills Required"
+                  icon={<Star className="text-yellow-500" />}
+                >
+                  {job.skills && job.skills.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {job.skills.map((skill, idx) => (
+                        <span
+                          key={skill.id || idx}
+                          className="px-3 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs font-medium border border-yellow-200"
+                        >
+                          {skill.name || skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No specific skills listed</p>
+                  )}
                 </Card>
 
                 <Card
