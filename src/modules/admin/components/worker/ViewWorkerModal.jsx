@@ -30,6 +30,7 @@ import {
   FileEdit,
   RefreshCw,
   Building2,
+  Wrench,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -480,6 +481,29 @@ const WorkerViewModal = ({
                         label="Designation"
                         value={worker.designation || "Not Provided"}
                       />
+                      {/* Skills - rendered as chips since it's an array */}
+                      <div className="md:col-span-2">
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 mb-2">
+                          <Wrench size={16} />
+                          <span>Skills</span>
+                        </div>
+                        {worker.skills && worker.skills.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {worker.skills.map((skill) => (
+                              <span
+                                key={skill.id}
+                                className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium"
+                              >
+                                {skill.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-900 dark:text-slate-100 font-medium">
+                            Not Provided
+                          </span>
+                        )}
+                      </div>
                       <DetailItem
                         icon={<Clock size={16} />}
                         label="Work Experience"
