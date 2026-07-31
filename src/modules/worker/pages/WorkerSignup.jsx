@@ -2000,7 +2000,7 @@ useEffect(() => {
             }`}
           >
             <img
-              src={skill.image_url || "/images/skills/placeholder.png"}
+              src={skill.skill_image || "/images/skills/placeholder.png"}
               alt={skill.name}
               className="w-full h-16 object-cover"
               onError={(e) => {
