@@ -235,7 +235,6 @@ const SkillsByDesignation = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const statusFilterRef = useRef(null);
-  const BASE_URL = process.env.REACT_APP_API_URL.replace("/api", "");
 
   const params = new URLSearchParams(location.search);
 
@@ -482,7 +481,7 @@ const SkillsByDesignation = () => {
                       <div className="w-14 h-14 rounded-lg overflow-hidden border border-gray-200">
                         {skill.skill_image ? (
                           <img
-                            src={`${BASE_URL}/uploads/skills/${skill.skill_image}`}
+                            src={skill.skill_image}
                             alt={skill.name}
                             className="w-full h-full object-cover"
                           />

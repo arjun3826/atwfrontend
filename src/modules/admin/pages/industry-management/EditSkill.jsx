@@ -33,7 +33,6 @@ const EditSkill = () => {
   const [errors, setErrors] = useState({ name: "", image: "" });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const BASE_URL = process.env.REACT_APP_API_URL.replace("/api", "");
 
   useEffect(() => {
     const fetchSkill = async () => {
@@ -50,9 +49,8 @@ const EditSkill = () => {
         // Adjust this line if your API returns a different field name
         // (e.g. skill.image_url, skill.image?.url, etc.)
         if (skill.skill_image) {
-          const imageUrl = `${BASE_URL}/uploads/skills/${skill.skill_image}`;
-          setExistingImage(imageUrl);
-          setImagePreview(imageUrl);
+          setExistingImage(skill.skill_image);
+          setImagePreview(skill.skill_image);
         }
       } catch (error) {
         console.error("Error fetching skill:", error);
