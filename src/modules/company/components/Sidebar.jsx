@@ -83,25 +83,25 @@ const menuItems = [
     requiredPermission: { module: "all_worker", action: "view" },
   },
   {
-    id: "Attandence",
+    id: "attendance",
     label: "Attandence",
     icon: Users,
     path: "/company/all-workers",
-    requiredPermission: { module: "all_worker", action: "view" },
+    requiredPermission: { module: "attendance", action: "view" },
     // skipPermissionCheck: true,
     subItems: [
       {
         label: "Face Register",
         path: "/company/worker-faceregister",
         icon: List,
-        requiredPermission: { module: "all_worker", action: "view" },
+        requiredPermission: { module: "attendance", action: "view" },
         // skipPermissionCheck: true,
       },
       {
         label: "Attendance",
         path: "/company/worker-attendance",
         icon: List,
-        requiredPermission: { module: "all_worker", action: "view" },
+        requiredPermission: { module: "attendance", action: "view" },
         // skipPermissionCheck: true,
       },
     ]

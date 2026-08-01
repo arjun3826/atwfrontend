@@ -12,6 +12,7 @@ import {
   resendAadhaarOtpAPI,
   verifyAadhaarOtpAPI,
   getSkillsByDesignationAPI,
+  registerWorkerFaceAPI,
 } from "../../../api/worker/workerAuthAPI";
 import Cookies from "js-cookie";
 import { useAuthContext } from "../../../common/context/AuthContext";
@@ -94,6 +95,11 @@ export const useWorkerSignup = ({ onSuccess } = {}) => {
   const [aadhaarVerified, setAadhaarVerified] = useState(false);
   const [aadhaarReferenceId, setAadhaarReferenceId] = useState("");
   const [aadhaarLoading, setAadhaarLoading] = useState(false);
+
+  //Face registration state
+  const [faceRegistered, setFaceRegistered] = useState(false);
+  const [faceRegistering, setFaceRegistering] = useState(false);
+  const [faceRegisterError, setFaceRegisterError] = useState("");
 
   // Cookie configuration
   const cookieOptions = {
@@ -474,6 +480,66 @@ useEffect(() => {
         setAadhaarLoading(false);
     }
 };
+
+const registerFace = async (imageBlob) => {
+    const existingUserForId = getUserFromCookie() || {};
+    const workerId =
+      existingUserForId.id ||
+      existingUserForId.worker_id ||
+      existingUserForId.worker?.id;
+ 
+    if (!workerId) {
+      const message = "Could not find your worker profile yet. Please complete the earlier steps first.";
+      setFaceRegisterError(message);
+      Swal.fire({ icon: "error", title: "Face Registration Failed", text: message });
+      return { success: false, message };
+    }
+ 
+    setFaceRegistering(true);
+    setFaceRegisterError("");
+    try {
+      const response = await registerWorkerFaceAPI(workerId, imageBlob);
+      const data = response?.data || response;
+ 
+      if (data?.status === false) {
+        throw new Error(data.message || "Face registration failed");
+      }
+ 
+      setFaceRegistered(true);
+ 
+      // Persist so it survives refresh / re-visits to this page
+      const existingUser = getUserFromCookie() || {};
+      Cookies.set(
+        "user",
+        JSON.stringify({ ...existingUser, is_face_registered: true }),
+        cookieOptions
+      );
+ 
+      Swal.fire({
+        icon: "success",
+        title: "Face Registered",
+        text: "Your face has been registered successfully.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+ 
+      return { success: true };
+    } catch (err) {
+      const message =
+        err.response?.data?.message || err.message || "Face registration failed";
+      setFaceRegisterError(message);
+ 
+      Swal.fire({
+        icon: "error",
+        title: "Face Registration Failed",
+        text: message,
+      });
+ 
+      return { success: false, message };
+    } finally {
+      setFaceRegistering(false);
+    }
+  };
 
   const validateStep1 = () => {
     const errs = {};
@@ -905,5 +971,9 @@ const validateStep3 = () => {
     nextStep,
     prevStep,
     goToStep,
+    faceRegistered,
+    faceRegistering,
+    faceRegisterError,
+    registerFace,
   };
 };
