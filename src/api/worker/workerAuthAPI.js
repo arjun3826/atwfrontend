@@ -114,3 +114,9 @@ export const getSkillsByDesignationAPI = async (designationId) => {
 export const workerLogoutAPI = () => {
   return axiosInstance.get("/worker/logout");
 };
+
+export const registerWorkerFaceAPI = (formData) => {
+  return axiosInstance.post("/worker/register-face", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};

@@ -985,9 +985,11 @@ import {
   X,
   Building2,
   UserPlus,
+  Camera,
 } from "lucide-react";
 import Cookies from "js-cookie";
 import { useWorkerSignup } from "../workerhooks/useWorkerSignup";
+import FaceScanner from "../../attendance/FaceScanner";
 
 const OTP_LENGTH = 6;
 
@@ -1020,10 +1022,19 @@ const WorkerSignup = () => {
     prevStep,
     goToStep,
     verifyReferralCode,
+     faceRegistered,
+    faceRegistering,
+    faceRegisterError,
+    registerFace,
   } = useWorkerSignup();
 
   const navigate = useNavigate();
+  const [showFaceScanner, setShowFaceScanner] = useState(false);
 
+const handleFaceCapture = async (imageBlob) => {
+  setShowFaceScanner(false);
+  await registerFace(imageBlob);
+};
   const [logoUrl, setLogoUrl] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
@@ -2236,6 +2247,50 @@ case 3:
                 You can add your bank details later, but they're required before receiving payments.
               </p>
             </div>
+
+          
+            {/* NEW: Optional face registration card. Purely optional — never blocks Submit. */}
+            <div className="border border-dashed border-blue-200 dark:border-blue-500/30 rounded-xl p-4 bg-blue-50/40 dark:bg-slate-700/50">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center shrink-0">
+                    <Camera size={18} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                      Face Registration{" "}
+                      <span className="text-xs font-normal text-gray-500 dark:text-gray-400">(Optional)</span>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-300 mt-1 max-w-sm">
+                      Register your face now for quick face-based attendance later. You can also
+                      do this anytime later from your dashboard.
+                    </p>
+                  </div>
+                </div>
+ 
+                {faceRegistered ? (
+                  <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm font-medium shrink-0">
+                    <CheckCircle size={16} /> Registered
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowFaceScanner(true)}
+                    disabled={faceRegistering}
+                    className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition shrink-0"
+                  >
+                    {faceRegistering ? "Registering..." : "Register Face"}
+                  </button>
+                )}
+              </div>
+ 
+              {faceRegisterError && (
+                <p className="text-red-500 dark:text-red-400 text-sm flex items-center mt-2 gap-1">
+                  <AlertCircle size={14} /> {faceRegisterError}
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Account Number (Optional)</label>
@@ -2558,6 +2613,12 @@ case 3:
             </div>
           </div>
         </div>
+      )}
+      {showFaceScanner && (
+        <FaceScanner
+          onClose={() => setShowFaceScanner(false)}
+          onCapture={handleFaceCapture}
+        />
       )}
     </>,
   );
