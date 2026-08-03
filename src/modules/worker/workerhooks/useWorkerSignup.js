@@ -349,24 +349,48 @@ useEffect(() => {
 
   // Aadhaar verification
       const sendAadhaarOtp = async (aadharNumber) => {
-        setAadhaarLoading(true);
-        try {
-            const res = await sendAadhaarOtpAPI(
-                aadharNumber
-            );
-            if (res.success) {
-                setAadhaarReferenceId(String(res.reference_id));
-                Swal.fire({
-                    icon: "success",
-                    text: "OTP sent successfully."
-                });
-                return res;
-            }
+  setAadhaarLoading(true);
+  try {
+    const res = await sendAadhaarOtpAPI(aadharNumber);
+    if (res.success) {
+      setAadhaarReferenceId(String(res.reference_id));
+      Swal.fire({ icon: "success", text: "OTP sent successfully." });
+    }
+    return res;
+  } catch (err) {
+    const data = err.response?.data || {};
+    return {
+      success: false,
+      error_code: data.error_code,
+      wait_seconds: data.wait_seconds,
+      message: data.message || "Unable to send OTP. Please try again.",
+    };
+  } finally {
+    setAadhaarLoading(false);
+  }
+};
 
-        } finally {
-            setAadhaarLoading(false);
-        }
-      };
+const resendAadhaarOtp = async (aadhaarNumber) => {
+  setAadhaarLoading(true);
+  try {
+    const res = await resendAadhaarOtpAPI(aadhaarNumber);
+    if (res.success) {
+      setAadhaarReferenceId(res.reference_id);
+      Swal.fire({ icon: "success", text: "OTP resent successfully." });
+    }
+    return res;
+  } catch (err) {
+    const data = err.response?.data || {};
+    return {
+      success: false,
+      error_code: data.error_code,
+      wait_seconds: data.wait_seconds,
+      message: data.message || "Unable to resend OTP. Please try again.",
+    };
+  } finally {
+    setAadhaarLoading(false);
+  }
+};
 
       const normalizeDobToISO = (dob) => {
         if (!dob) return "";
@@ -456,30 +480,7 @@ useEffect(() => {
         return res;
     };
 
-    const resendAadhaarOtp = async (aadhaarNumber) => {
-    setAadhaarLoading(true);
-
-    try {
-
-        const res = await resendAadhaarOtpAPI(aadhaarNumber);
-
-        if(res.success){
-
-            setAadhaarReferenceId(res.reference_id);
-
-            Swal.fire({
-                icon:"success",
-                text:"OTP resent successfully."
-            });
-
-        }
-
-        return res;
-
-    } finally {
-        setAadhaarLoading(false);
-    }
-};
+   
 
 const registerFace = async (imageBlob) => {
     const existingUserForId = getUserFromCookie() || {};
