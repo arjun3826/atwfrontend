@@ -1181,7 +1181,7 @@ useEffect(() => {
   const [aadhaarError, setAadhaarError] = useState("");
   const [aadhaarBusy, setAadhaarBusy] = useState(false);
   const [showAadhaarSuccessToast, setShowAadhaarSuccessToast] = useState(false);
-  const [aadhaarResendTimer, setAadhaarResendTimer] = useState(30);
+  const [aadhaarResendTimer, setAadhaarResendTimer] = useState(45);
   const aadhaarOtpRefs = useRef([]);
   const [referenceId, setReferenceId] = useState("");
   const privacyContentRef = useRef(null);
@@ -1259,54 +1259,60 @@ useEffect(() => {
 
   // ---------------- Aadhaar gate handlers (STUB) ----------------
   const onSubmitAadhaarNumber = async (e) => {
-    e.preventDefault();
-    const digits = aadhaarNumberInput.replace(/\D/g, "");
-    if (digits.length !== 12) {
-      setAadhaarError("Enter a valid 12-digit Aadhaar number");
-      return;
-    }
-    setAadhaarError("");
-    setAadhaarBusy(true);
-    const res = await sendAadhaarOtp(digits);
-    if (res.success) {
-        setReferenceId(res.reference_id);
-        setAadhaarGateStage("otp");
-    }
-    setAadhaarBusy(false);
-    if (res.success) {
-      setAadhaarGateStage("otp");
-      setAadhaarOtpDigits(Array(OTP_LENGTH).fill(""));
-      setAadhaarResendTimer(30);
-      setTimeout(() => aadhaarOtpRefs.current[0]?.focus(), 50);
-    } else {
-      setAadhaarError(res.message || "Could not send OTP");
-    }
-  };
+  e.preventDefault();
+  const digits = aadhaarNumberInput.replace(/\D/g, "");
+  if (digits.length !== 12) {
+    setAadhaarError("Enter a valid 12-digit Aadhaar number");
+    return;
+  }
+  setAadhaarError("");
+  setAadhaarBusy(true);
+  const res = await sendAadhaarOtp(digits);
+  setAadhaarBusy(false);
+
+  if (res.success) {
+    setReferenceId(res.reference_id);
+    setAadhaarGateStage("otp");
+    setAadhaarOtpDigits(Array(OTP_LENGTH).fill(""));
+    setAadhaarResendTimer(45);
+    setTimeout(() => aadhaarOtpRefs.current[0]?.focus(), 50);
+  } else if (res.error_code === "OTP_COOLDOWN") {
+    // Aadhaar OTP was already sent recently — move to OTP screen
+    // and start the countdown at the server-specified wait time.
+    setAadhaarGateStage("otp");
+    setAadhaarResendTimer(res.wait_seconds || 45);
+    setAadhaarError(res.message);
+  } else {
+    setAadhaarError(res.message || "Could not send OTP");
+  }
+};
 
   const onResendAadhaarOtp = async () => {
-    if (aadhaarResendTimer > 0) return;
+  if (aadhaarResendTimer > 0) return;
 
-    setAadhaarBusy(true);
+  const digits = aadhaarNumberInput.replace(/\D/g, "");
+  if (digits.length !== 12) {
+    setAadhaarError("Aadhaar number missing — please go back and re-enter it.");
+    return;
+  }
 
-    const res = await resendAadhaarOtp(
-        aadhaarNumberInput.replace(/\D/g, "")
-    );
+  setAadhaarBusy(true);
+  const res = await resendAadhaarOtp(digits);
+  setAadhaarBusy(false);
 
-    setAadhaarBusy(false);
-
-    if (res.success) {
-
-        setReferenceId(res.reference_id);
-
-        setAadhaarResendTimer(30);
-        setAadhaarOtpDigits(Array(OTP_LENGTH).fill(""));
-        aadhaarOtpRefs.current[0]?.focus();
-
-    } else {
-
-        setAadhaarError(res.message || "Unable to resend OTP");
-
-    }
+  if (res.success) {
+    setAadhaarError("");
+    setAadhaarResendTimer(45);
+    setAadhaarOtpDigits(Array(OTP_LENGTH).fill(""));
+    aadhaarOtpRefs.current[0]?.focus();
+  } else if (res.error_code === "OTP_COOLDOWN") {
+    // Don't show a scary error — just restart the countdown
+    // with the exact wait time the provider asked for.
+    setAadhaarResendTimer(res.wait_seconds || 45);
+    setAadhaarError(res.message);
+  } else {
+    setAadhaarError(res.message || "Unable to resend OTP");
+  }
 };
 
   const handleAadhaarOtpBoxChange = (index, value) => {
